@@ -2,30 +2,36 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { authenticate, isAuthenticated, requireRole } from "@/lib/auth";
 import { ok, ApiError } from "@/lib/api-response";
-
-export const dynamic = "force-dynamic";
-const VALID_STATUSES = ["pending", "approved", "rejected"] as const;
-type AppStatus = (typeof VALID_STATUSES)[number];
+import { Prisma } from "@prisma/client";
 
 /**
  * GET /api/admin/provider-applications
- * Admin-only: list all provider applications with filtering.
- * Query: ?status=pending&page=1&limit=20
+ * Admin endpoint to list provider applications.
+ * Query: ?status=pending&provider_type=agency&page=1&limit=20
  */
 export async function GET(req: NextRequest) {
   try {
-    const user = await authenticate(req);
-    if (!isAuthenticated(user)) return user;
+    const userPayload = await authenticate(req);
+    if (!isAuthenticated(userPayload)) return userPayload;
 
-    const roleError = requireRole(user, "admin");
+    const roleError = requireRole(userPayload, "admin");
     if (roleError) return roleError;
 
     const { searchParams } = new URL(req.url);
+
     const statusParam = searchParams.get("status");
-    const status =
-      statusParam && VALID_STATUSES.includes(statusParam as AppStatus)
-        ? (statusParam as AppStatus)
-        : null;
+    let applicationStatus: Prisma.EnumApplicationStatusFilter | undefined =
+      undefined;
+    if (["pending", "approved", "rejected"].includes(statusParam || "")) {
+      applicationStatus = { equals: statusParam as any };
+    }
+
+    const providerTypeParam = searchParams.get("provider_type");
+    let providerType: Prisma.EnumProviderTypeFilter | undefined = undefined;
+    if (["agency"].includes(providerTypeParam || "")) {
+      providerType = { equals: providerTypeParam as any };
+    }
+
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
     const limit = Math.min(
       100,
@@ -33,54 +39,47 @@ export async function GET(req: NextRequest) {
     );
     const skip = (page - 1) * limit;
 
-    const includeUser = {
-      user: {
-        select: {
-          email: true,
-          profile: { select: { full_name: true, phone: true } },
+    const where: Prisma.ProviderApplicationWhereInput = {
+      ...(applicationStatus && { application_status: applicationStatus }),
+      ...(providerType && { provider_type: providerType }),
+    };
+
+    const [applications, total] = await Promise.all([
+      db.providerApplication.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              email: true,
+              profile: {
+                select: {
+                  full_name: true,
+                  phone: true,
+                },
+              },
+            },
+          },
         },
-      },
-    } as const;
-
-    const applications = status
-      ? await db.providerApplication.findMany({
-          where: { application_status: status },
-          include: includeUser,
-          orderBy: { created_at: "desc" },
-          skip,
-          take: limit,
-        })
-      : await db.providerApplication.findMany({
-          include: includeUser,
-          orderBy: { created_at: "desc" },
-          skip,
-          take: limit,
-        });
-
-    const total = status
-      ? await db.providerApplication.count({
-          where: { application_status: status },
-        })
-      : await db.providerApplication.count();
+        orderBy: { created_at: "desc" },
+        skip,
+        take: limit,
+      }),
+      db.providerApplication.count({ where }),
+    ]);
 
     return ok({
-      data: applications.map((app: any) => ({
+      data: applications.map((app) => ({
         id: app.id,
-        user_id: app.user_id,
         provider_type: app.provider_type,
         business_name: app.business_name,
-        description: app.description,
-        portfolio_url: app.portfolio_url,
-        verification_docs: app.verification_docs,
         application_status: app.application_status,
-        rejection_reason: app.rejection_reason,
-        applicant: {
-          full_name: app.user.profile?.full_name ?? null,
-          email: app.user.email,
-          phone: app.user.profile?.phone ?? null,
-        },
         created_at: app.created_at,
-        updated_at: app.updated_at,
+        applicant: {
+          id: app.user_id,
+          email: app.user.email,
+          full_name: app.user.profile?.full_name,
+          phone: app.user.profile?.phone,
+        },
       })),
       pagination: {
         page,
