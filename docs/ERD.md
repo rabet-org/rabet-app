@@ -8,432 +8,752 @@
 - **Providers** (agencies) pay a small fee to unlock and contact qualified leads
 - **Admins** moderate content, verify providers, and manage platform operations
 
-This ERD defines the core data structure for the MVP phase, focusing on:
+---
 
-- Secure authentication (JWT + OAuth)
-- Service request management
-- Pay-per-lead unlock system with wallet-based payments
-- Agency verification and reviews
-- Financial operations tracking (GDPR compliant)
-- Optional subscription plans for agencies
+## Schema Design Principles
 
-The architecture prioritizes **transparency**, **security**, and **scalability** while maintaining compliance with data protection regulations.
+- **Single Responsibility**: Each table owns one domain of data
+- **No Duplication**: Shared fields live in one place and are referenced
+- **Derived Values**: Aggregates (total_spent, etc.) are computed via queries, not stored
+- **Soft Deletes**: Reviews use `deleted_at` to maintain audit trail
+- **Normalization**: Categories and services use a lookup table instead of free-text strings
+
+---
+
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    USER {
+        string id PK
+        string email UK
+        enum role
+        boolean email_verified
+        timestamp email_verified_at
+        boolean is_active
+        boolean is_blocked
+        timestamp last_login_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    USER_AUTH {
+        string id PK
+        string user_id FK
+        string password_hash
+        enum auth_provider
+        string oauth_id
+        string email_verification_token
+        timestamp email_verification_token_expires
+        string password_reset_token
+        timestamp password_reset_expires
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    USER_PROFILE {
+        string id PK
+        string user_id FK
+        string full_name
+        string phone
+        string avatar_url
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    REFRESH_TOKEN {
+        string id PK
+        string user_id FK
+        string token_hash UK
+        string device_info
+        string ip_address
+        timestamp expires_at
+        boolean revoked
+        timestamp revoked_at
+        timestamp created_at
+    }
+
+    CATEGORY {
+        string id PK
+        string slug UK
+        string name
+        text description
+        string icon
+        boolean is_active
+        timestamp created_at
+    }
+
+    PROVIDER_APPLICATION {
+        string id PK
+        string user_id FK
+        enum provider_type
+        string business_name
+        text description
+        string portfolio_url
+        json verification_docs
+        enum application_status
+        text rejection_reason
+        string reviewed_by FK
+        timestamp reviewed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PROVIDER_PROFILE {
+        string id PK
+        string user_id FK
+        string application_id FK
+        text description
+        string portfolio_url
+        boolean is_verified
+        timestamp verified_at
+        string verified_by FK
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PROVIDER_SERVICE {
+        string provider_id FK
+        string category_id FK
+        timestamp created_at
+    }
+
+    PROVIDER_WALLET {
+        string id PK
+        string provider_id FK
+        decimal balance
+        string currency
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    WALLET_TRANSACTION {
+        string id PK
+        string wallet_id FK
+        string provider_id FK
+        enum type
+        decimal amount
+        decimal balance_before
+        decimal balance_after
+        string reference_type
+        string reference_id
+        string description
+        json metadata
+        timestamp created_at
+    }
+
+    REQUEST {
+        string id PK
+        string user_id FK
+        string category_id FK
+        string title
+        text description
+        string budget_range
+        string location
+        enum status
+        timestamp deadline
+        decimal unlock_fee
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    LEAD_UNLOCK {
+        string id PK
+        string request_id FK
+        string provider_id FK
+        string wallet_transaction_id FK
+        decimal unlock_fee
+        enum status
+        string failed_reason
+        timestamp refunded_at
+        timestamp unlocked_at
+        timestamp completed_at
+    }
+
+    REVIEW {
+        string id PK
+        string request_id FK
+        string client_id FK
+        string provider_id FK
+        integer rating
+        text comment
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+
+    SUBSCRIPTION {
+        string id PK
+        string provider_id FK
+        enum plan_type
+        integer free_unlocks_remaining
+        boolean priority_listing
+        enum billing_cycle
+        timestamp starts_at
+        timestamp expires_at
+        enum status
+        timestamp cancelled_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    SUBSCRIPTION_HISTORY {
+        string id PK
+        string subscription_id FK
+        string provider_id FK
+        enum event_type
+        enum plan_from
+        enum plan_to
+        decimal amount_charged
+        string wallet_transaction_id FK
+        timestamp created_at
+    }
+
+    NOTIFICATION {
+        string id PK
+        string user_id FK
+        enum type
+        string title
+        text message
+        boolean is_read
+        json metadata
+        timestamp created_at
+    }
+
+    ADMIN_LOG {
+        string id PK
+        string admin_id FK
+        enum action_type
+        string target_type
+        string target_id
+        json details
+        timestamp created_at
+    }
+
+    USER ||--|| USER_AUTH : "has auth"
+    USER ||--|| USER_PROFILE : "has profile"
+    USER ||--o{ REFRESH_TOKEN : "has sessions"
+    USER ||--o| PROVIDER_APPLICATION : "submits"
+    USER ||--o| PROVIDER_PROFILE : "becomes"
+    USER ||--o{ REQUEST : "creates"
+    USER ||--o{ REVIEW : "writes"
+    USER ||--o{ NOTIFICATION : "receives"
+    USER ||--o{ ADMIN_LOG : "performs"
+
+    PROVIDER_APPLICATION ||--o| PROVIDER_PROFILE : "approved into"
+
+    PROVIDER_PROFILE ||--o{ PROVIDER_SERVICE : "offers"
+    PROVIDER_PROFILE ||--|| PROVIDER_WALLET : "has wallet"
+    PROVIDER_PROFILE ||--o{ LEAD_UNLOCK : "unlocks"
+    PROVIDER_PROFILE ||--o{ REVIEW : "receives"
+    PROVIDER_PROFILE ||--o| SUBSCRIPTION : "subscribes"
+
+    PROVIDER_WALLET ||--o{ WALLET_TRANSACTION : "logs"
+
+    WALLET_TRANSACTION ||--o| LEAD_UNLOCK : "debited by"
+    WALLET_TRANSACTION ||--o| SUBSCRIPTION_HISTORY : "charged for"
+
+    REQUEST ||--o{ LEAD_UNLOCK : "unlocked by"
+    REQUEST ||--o{ REVIEW : "reviewed via"
+
+    CATEGORY ||--o{ REQUEST : "classifies"
+    CATEGORY ||--o{ PROVIDER_SERVICE : "offered as"
+
+    SUBSCRIPTION ||--o{ SUBSCRIPTION_HISTORY : "logs events"
+```
 
 ---
 
 ## 1. USER
 
-Core authentication and user management. Supports JWT and OAuth authentication with three roles: client, agency, and admin.
+Core identity and status. Authentication data lives in `USER_AUTH`. Display data lives in `USER_PROFILE`.
 
-| Column                   | Type      | Constraints                | Description                                 |
-| ------------------------ | --------- | -------------------------- | ------------------------------------------- |
-| id                       | string    | PK                         | Unique user identifier (UUID)               |
-| email                    | string    | UK, NOT NULL               | User email address                          |
-| password_hash            | string    | NULLABLE                   | Hashed password (null for OAuth-only users) |
-| full_name                | string    | NOT NULL                   | User's full name                            |
-| phone                    | string    |                            | Contact phone number                        |
-| avatar_url               | string    |                            | Profile picture URL                         |
-| role                     | enum      | NOT NULL, DEFAULT 'client' | `client`, `provider`, or `admin`            |
-| auth_provider            | enum      | NOT NULL, DEFAULT 'local'  | `local`, `google`, `facebook`, `apple`      |
-| oauth_id                 | string    | NULLABLE                   | OAuth provider user ID                      |
-| email_verified           | boolean   | NOT NULL, DEFAULT false    | Email verification status                   |
-| email_verified_at        | timestamp | NULLABLE                   | Email verification timestamp                |
-| is_active                | boolean   | NOT NULL, DEFAULT true     | Account active status                       |
-| is_blocked               | boolean   | NOT NULL, DEFAULT false    | Admin block status                          |
-| last_login_at            | timestamp | NULLABLE                   | Last successful login                       |
-| password_reset_token     | string    | NULLABLE, INDEXED          | Token for password reset                    |
-| password_reset_expires   | timestamp | NULLABLE                   | Password reset token expiry                 |
-| email_verification_token | string    | NULLABLE, INDEXED          | Token for email verification                |
-| created_at               | timestamp | NOT NULL                   | Account creation time                       |
-| updated_at               | timestamp | NOT NULL                   | Last update time                            |
+| Column            | Type      | Constraints                | Description                     |
+| ----------------- | --------- | -------------------------- | ------------------------------- |
+| id                | string    | PK                         | Unique user identifier (UUID)   |
+| email             | string    | UK, NOT NULL               | User email address              |
+| role              | enum      | NOT NULL, DEFAULT 'client' | `client`, `provider`, `admin`   |
+| email_verified    | boolean   | NOT NULL, DEFAULT false    | Email verification status       |
+| email_verified_at | timestamp | NULLABLE                   | When email was verified         |
+| is_active         | boolean   | NOT NULL, DEFAULT true     | Account active status           |
+| is_blocked        | boolean   | NOT NULL, DEFAULT false    | Admin block status              |
+| last_login_at     | timestamp | NULLABLE                   | Last successful login timestamp |
+| created_at        | timestamp | NOT NULL                   | Account creation time           |
+| updated_at        | timestamp | NOT NULL                   | Last update time                |
+
+**Indexes:** `email` (unique)
+
+---
+
+## 2. USER_AUTH
+
+Sensitive authentication state. Separated from `USER` to isolate credentials and minimize exposure surface.
+
+| Column                           | Type      | Constraints               | Description                                 |
+| -------------------------------- | --------- | ------------------------- | ------------------------------------------- |
+| id                               | string    | PK                        | Unique record identifier                    |
+| user_id                          | string    | FK → USER.id, UK          | Associated user (1:1)                       |
+| password_hash                    | string    | NULLABLE                  | Hashed password (null for OAuth-only users) |
+| auth_provider                    | enum      | NOT NULL, DEFAULT 'local' | `local`, `google`, `facebook`, `apple`      |
+| oauth_id                         | string    | NULLABLE                  | OAuth provider's user ID                    |
+| email_verification_token         | string    | NULLABLE, INDEXED         | Token for email verification                |
+| email_verification_token_expires | timestamp | NULLABLE                  | Expiry for verification token               |
+| password_reset_token             | string    | NULLABLE, INDEXED         | Token for password reset                    |
+| password_reset_expires           | timestamp | NULLABLE                  | Password reset token expiry                 |
+| created_at                       | timestamp | NOT NULL                  | Record creation time                        |
+| updated_at                       | timestamp | NOT NULL                  | Last update time                            |
 
 **Indexes:**
 
-- `email` (unique)
+- `user_id` (unique)
 - `oauth_id + auth_provider` (composite unique for OAuth users)
-- `password_reset_token`, `email_verification_token`
+- `email_verification_token`, `password_reset_token`
 
 **Notes:**
 
 - `password_hash` is null when user signs up via OAuth only
-- `oauth_id` stores the unique identifier from OAuth provider (Google ID, Facebook ID, etc.)
-- JWT tokens are stateless and stored client-side only
-- For added security, consider adding a separate `REFRESH_TOKEN` table for JWT refresh token rotation
+- Never return this record in public-facing API responses
 
 ---
 
-## 2. REFRESH_TOKEN
+## 3. USER_PROFILE
 
-Manages JWT refresh tokens for secure token rotation and session management.
+Display and contact information. Separated from `USER` to cleanly support profile editing without touching auth state.
+
+| Column     | Type      | Constraints      | Description              |
+| ---------- | --------- | ---------------- | ------------------------ |
+| id         | string    | PK               | Unique record identifier |
+| user_id    | string    | FK → USER.id, UK | Associated user (1:1)    |
+| full_name  | string    | NOT NULL         | Display name             |
+| phone      | string    | NULLABLE         | Contact phone number     |
+| avatar_url | string    | NULLABLE         | Profile picture URL      |
+| created_at | timestamp | NOT NULL         | Record creation time     |
+| updated_at | timestamp | NOT NULL         | Last update time         |
+
+**Indexes:** `user_id` (unique)
+
+---
+
+## 4. REFRESH_TOKEN
+
+Manages JWT refresh tokens for secure token rotation and multi-session support.
 
 | Column      | Type      | Constraints             | Description                  |
 | ----------- | --------- | ----------------------- | ---------------------------- |
 | id          | string    | PK                      | Unique token identifier      |
 | user_id     | string    | FK → USER.id, INDEXED   | Associated user              |
 | token_hash  | string    | UK, NOT NULL            | Hashed refresh token         |
-| device_info | string    |                         | User agent/device identifier |
-| ip_address  | string    |                         | IP address at token creation |
+| device_info | string    | NULLABLE                | User agent/device identifier |
+| ip_address  | string    | NULLABLE                | IP address at token creation |
 | expires_at  | timestamp | NOT NULL                | Token expiration time        |
 | revoked     | boolean   | NOT NULL, DEFAULT false | Revocation status            |
 | revoked_at  | timestamp | NULLABLE                | Revocation timestamp         |
 | created_at  | timestamp | NOT NULL                | Token creation time          |
 
-**Indexes:**
-
-- `user_id`
-- `token_hash` (unique)
-- `expires_at` (for cleanup queries)
+**Indexes:** `user_id`, `token_hash` (unique), `expires_at`
 
 **Notes:**
 
-- Store only hashed tokens for security
-- Allows revoking specific sessions (e.g., "logout from other devices")
+- Store only hashed tokens — never raw values
+- Allows revoking specific sessions ("logout from other devices")
 - Clean up expired tokens periodically via cron job
 
 ---
 
-## 3. PROVIDER_APPLICATION
+## 5. CATEGORY
 
-Pending applications for providers (agencies) awaiting admin approval.
+Normalized lookup table for service categories. Used by both `REQUEST` and `PROVIDER_SERVICE`.
 
-| Column             | Type      | Constraints                 | Description                       |
-| ------------------ | --------- | --------------------------- | --------------------------------- |
-| id                 | string    | PK                          | Unique application identifier     |
-| user_id            | string    | FK → USER.id, UK            | Associated user account           |
-| provider_type      | enum      | NOT NULL                    | `agency`                          |
-| business_name      | string    | NULLABLE                    | Business name (for agencies)      |
-| full_name          | string    | NOT NULL                    | Provider full name                |
-| description        | text      | NOT NULL                    | Provider description              |
-| services           | string[]  | NOT NULL                    | Array of offered services         |
-| portfolio_url      | string    |                             | Portfolio/website URL             |
-| verification_docs  | json      | NOT NULL                    | Documents for verification        |
-| application_status | enum      | NOT NULL, DEFAULT 'pending' | `pending`, `approved`, `rejected` |
-| rejection_reason   | text      | NULLABLE                    | Reason if rejected                |
-| reviewed_by        | string    | FK → USER.id, NULLABLE      | Admin who reviewed                |
-| reviewed_at        | timestamp | NULLABLE                    | Review completion time            |
-| created_at         | timestamp | NOT NULL                    | Application submission time       |
-| updated_at         | timestamp | NOT NULL                    | Last update time                  |
+| Column      | Type      | Constraints            | Description                      |
+| ----------- | --------- | ---------------------- | -------------------------------- |
+| id          | string    | PK                     | Unique category identifier       |
+| slug        | string    | UK, NOT NULL           | URL-safe key (e.g. `web-design`) |
+| name        | string    | NOT NULL               | Display name (e.g. "Web Design") |
+| description | text      | NULLABLE               | Category description             |
+| icon        | string    | NULLABLE               | Icon identifier or URL           |
+| is_active   | boolean   | NOT NULL, DEFAULT true | Whether category is available    |
+| created_at  | timestamp | NOT NULL               | Record creation time             |
 
-**Indexes:**
-
-- `user_id` (unique)
-- `application_status`
+**Indexes:** `slug` (unique), `is_active`
 
 **Notes:**
 
-- Users with role `client` can submit provider applications
-- Once approved, a `PROVIDER_PROFILE` record is created and user role is updated to `provider`
-- Rejected applications can be resubmitted with updates
+- Single source of truth for valid categories — prevents inconsistencies like "web design" vs. "web-design"
+- Admin-managed; not user-creatable
 
 ---
 
-## 4. PROVIDER_PROFILE
+## 6. PROVIDER_APPLICATION
 
-Approved provider profiles (agencies) with business details and verification.
+Applications submitted by clients who want to become verified providers. Source of truth for all submitted business data.
 
-| Column         | Type      | Constraints                      | Description                  |
-| -------------- | --------- | -------------------------------- | ---------------------------- |
-| id             | string    | PK                               | Unique profile identifier    |
-| user_id        | string    | FK → USER.id, UK                 | Associated user account      |
-| application_id | string    | FK → PROVIDER_APPLICATION.id, UK | Original application         |
-| provider_type  | enum      | NOT NULL                         | `agency`                     |
-| business_name  | string    | NULLABLE                         | Business name (for agencies) |
-| full_name      | string    | NOT NULL                         | Provider full name           |
-| description    | text      |                                  | Provider description         |
-| services       | string[]  |                                  | Array of offered services    |
-| portfolio_url  | string    |                                  | Portfolio/website URL        |
-| is_verified    | boolean   | NOT NULL, DEFAULT false          | Manual verification badge    |
-| verified_at    | timestamp | NULLABLE                         | Verification completion time |
-| is_active      | boolean   | NOT NULL, DEFAULT true           | Account active status        |
-| created_at     | timestamp | NOT NULL                         | Profile creation time        |
-| updated_at     | timestamp | NOT NULL                         | Last update time             |
+| Column             | Type      | Constraints                 | Description                          |
+| ------------------ | --------- | --------------------------- | ------------------------------------ |
+| id                 | string    | PK                          | Unique application identifier        |
+| user_id            | string    | FK → USER.id, UK            | Applicant user (one application max) |
+| provider_type      | enum      | NOT NULL                    | `agency`                             |
+| business_name      | string    | NULLABLE                    | Business/agency name                 |
+| description        | text      | NOT NULL                    | Provider description (min 100 chars) |
+| portfolio_url      | string    | NULLABLE                    | Portfolio/website URL                |
+| verification_docs  | json      | NOT NULL                    | Uploaded documents for verification  |
+| application_status | enum      | NOT NULL, DEFAULT 'pending' | `pending`, `approved`, `rejected`    |
+| rejection_reason   | text      | NULLABLE                    | Reason for rejection (if rejected)   |
+| reviewed_by        | string    | FK → USER.id, NULLABLE      | Admin who reviewed the application   |
+| reviewed_at        | timestamp | NULLABLE                    | Review completion timestamp          |
+| created_at         | timestamp | NOT NULL                    | Application submission time          |
+| updated_at         | timestamp | NOT NULL                    | Last update time                     |
 
-**Indexes:**
-
-- `user_id` (unique)
-- `application_id` (unique)
-- `provider_type`
-- `is_verified`
+**Indexes:** `user_id` (unique), `application_status`
 
 **Notes:**
 
-- Created automatically when `PROVIDER_APPLICATION` is approved
-- `is_verified` is separate from approval - provides trust badge after further verification
+- `full_name` removed — read from `USER_PROFILE` via `user_id`
+- On approval: `PROVIDER_PROFILE` + `PROVIDER_WALLET` are auto-created; user role updated to `provider`
+- Rejected applications can be resubmitted (status reset to `pending`)
 
 ---
 
-## 5. PROVIDER_WALLET
+## 7. PROVIDER_SERVICE
 
-Manages provider balance, credits, and financial operations.
+Join table linking providers to categories (many-to-many). Replaces the `services string[]` array on the old profile.
 
-| Column          | Type      | Constraints                  | Description                  |
-| --------------- | --------- | ---------------------------- | ---------------------------- |
-| id              | string    | PK                           | Unique wallet identifier     |
-| provider_id     | string    | FK → PROVIDER_PROFILE.id, UK | Associated provider          |
-| balance         | decimal   | NOT NULL, DEFAULT 0          | Current wallet balance (EGP) |
-| total_spent     | decimal   | NOT NULL, DEFAULT 0          | Lifetime spending            |
-| total_deposited | decimal   | NOT NULL, DEFAULT 0          | Lifetime deposits            |
-| currency        | string    | NOT NULL, DEFAULT 'EGP'      | Wallet currency              |
-| created_at      | timestamp | NOT NULL                     | Wallet creation time         |
-| updated_at      | timestamp | NOT NULL                     | Last update time             |
+| Column      | Type      | Constraints              | Description              |
+| ----------- | --------- | ------------------------ | ------------------------ |
+| provider_id | string    | FK → PROVIDER_PROFILE.id | Provider                 |
+| category_id | string    | FK → CATEGORY.id         | Service category offered |
+| created_at  | timestamp | NOT NULL                 | When service was added   |
 
-**Indexes:**
+**Primary Key:** `(provider_id, category_id)` — composite
 
-- `provider_id` (unique)
+**Indexes:** `provider_id`, `category_id`
+
+---
+
+## 8. PROVIDER_PROFILE
+
+Approved provider profile. Static business data is not duplicated here — it's read from the originating `PROVIDER_APPLICATION`.
+
+| Column         | Type      | Constraints                      | Description                      |
+| -------------- | --------- | -------------------------------- | -------------------------------- |
+| id             | string    | PK                               | Unique profile identifier        |
+| user_id        | string    | FK → USER.id, UK                 | Associated user account          |
+| application_id | string    | FK → PROVIDER_APPLICATION.id, UK | Source application               |
+| description    | text      | NULLABLE                         | Live description (overridable)   |
+| portfolio_url  | string    | NULLABLE                         | Live portfolio URL (overridable) |
+| is_verified    | boolean   | NOT NULL, DEFAULT false          | Manual verification badge        |
+| verified_at    | timestamp | NULLABLE                         | When verification was granted    |
+| verified_by    | string    | FK → USER.id, NULLABLE           | Admin who granted verification   |
+| is_active      | boolean   | NOT NULL, DEFAULT true           | Profile active status            |
+| created_at     | timestamp | NOT NULL                         | Profile creation time            |
+| updated_at     | timestamp | NOT NULL                         | Last update time                 |
+
+**Indexes:** `user_id` (unique), `application_id` (unique), `is_verified`
 
 **Notes:**
 
-- Created automatically when provider profile is approved
-- Balance is debited when unlocking leads or making payments
-- Balance is credited via deposits/top-ups
-- All financial operations logged in `WALLET_TRANSACTION` table
+- `provider_type`, `business_name` — read from linked `PROVIDER_APPLICATION`
+- `full_name` — read from `USER_PROFILE` via `user_id`
+- `services` — queried from `PROVIDER_SERVICE` (many-to-many with `CATEGORY`)
+- Created atomically with `PROVIDER_WALLET` when application is approved
 
 ---
 
-## 6. WALLET_TRANSACTION
+## 9. PROVIDER_WALLET
 
-Detailed log of all wallet operations (deposits, debits, refunds).
+Manages provider balance. Aggregates (`total_spent`, `total_deposited`) are removed — computed from `WALLET_TRANSACTION` on demand.
 
-| Column         | Type      | Constraints                       | Description                                                   |
-| -------------- | --------- | --------------------------------- | ------------------------------------------------------------- |
-| id             | string    | PK                                | Unique transaction identifier                                 |
-| wallet_id      | string    | FK → PROVIDER_WALLET.id, INDEXED  | Associated wallet                                             |
-| provider_id    | string    | FK → PROVIDER_PROFILE.id, INDEXED | Provider owner                                                |
-| type           | enum      | NOT NULL                          | `deposit`, `debit`, `refund`, `adjustment`                    |
-| amount         | decimal   | NOT NULL                          | Transaction amount (positive for credit, negative for debit)  |
-| balance_before | decimal   | NOT NULL                          | Wallet balance before transaction                             |
-| balance_after  | decimal   | NOT NULL                          | Wallet balance after transaction                              |
-| reference_type | string    | NULLABLE                          | Related entity type (`lead_unlock`, `subscription`, `top_up`) |
-| reference_id   | string    | NULLABLE, INDEXED                 | Related entity ID                                             |
-| description    | string    |                                   | Human-readable description                                    |
-| metadata       | json      |                                   | Additional transaction details                                |
-| created_at     | timestamp | NOT NULL                          | Transaction timestamp                                         |
+| Column      | Type      | Constraints                  | Description                  |
+| ----------- | --------- | ---------------------------- | ---------------------------- |
+| id          | string    | PK                           | Unique wallet identifier     |
+| provider_id | string    | FK → PROVIDER_PROFILE.id, UK | Associated provider (1:1)    |
+| balance     | decimal   | NOT NULL, DEFAULT 0          | Current wallet balance (EGP) |
+| currency    | string    | NOT NULL, DEFAULT 'EGP'      | Wallet currency              |
+| created_at  | timestamp | NOT NULL                     | Wallet creation time         |
+| updated_at  | timestamp | NOT NULL                     | Last balance update time     |
+
+**Indexes:** `provider_id` (unique)
+
+**Notes:**
+
+- `total_spent` / `total_deposited` removed — use `SUM(amount) WHERE type = 'debit'|'deposit'` on `WALLET_TRANSACTION`
+- Balance updates use row-level locking to prevent race conditions
+- Positive balance enforced via application logic before any debit
+
+---
+
+## 10. WALLET_TRANSACTION
+
+Immutable audit log of all wallet operations. Every financial change must be represented here.
+
+| Column         | Type      | Constraints                       | Description                                             |
+| -------------- | --------- | --------------------------------- | ------------------------------------------------------- |
+| id             | string    | PK                                | Unique transaction identifier                           |
+| wallet_id      | string    | FK → PROVIDER_WALLET.id, INDEXED  | Associated wallet                                       |
+| provider_id    | string    | FK → PROVIDER_PROFILE.id, INDEXED | Provider owner (denormalized for query performance)     |
+| type           | enum      | NOT NULL                          | `deposit`, `debit`, `refund`, `adjustment`              |
+| amount         | decimal   | NOT NULL                          | Positive = credit, negative = debit                     |
+| balance_before | decimal   | NOT NULL                          | Wallet balance before transaction                       |
+| balance_after  | decimal   | NOT NULL                          | Wallet balance after transaction                        |
+| reference_type | string    | NULLABLE                          | `lead_unlock`, `subscription`, `top_up`                 |
+| reference_id   | string    | NULLABLE, INDEXED                 | ID of related entity                                    |
+| description    | string    | NULLABLE                          | Human-readable description                              |
+| metadata       | json      | NULLABLE                          | Payment provider details (GDPR compliant, no card data) |
+| created_at     | timestamp | NOT NULL                          | Transaction timestamp (immutable)                       |
 
 **Indexes:**
 
-- `wallet_id + created_at` (for transaction history queries)
+- `wallet_id + created_at`
 - `provider_id + created_at`
-- `reference_type + reference_id` (for lookup by related entity)
+- `reference_type + reference_id`
 
 **Notes:**
 
-- Immutable audit trail of all wallet operations
-- `balance_before` and `balance_after` ensure transaction integrity
-- Supports linking to different reference types (unlocks, subscriptions, top-ups)
-- **For External Payments (deposits):** Store payment provider details in `metadata`:
+- Records are **immutable** — never updated, only inserted
+- `balance_before/after` ensure full auditability even without wallet state
+- metadata example for deposits:
   ```json
   {
-    "payment_provider": "paymob" | "stripe",
+    "payment_provider": "paymob",
     "external_transaction_id": "paymob_txn_123",
-    "payment_method": "card" | "wallet",
+    "payment_method": "card",
     "card_last_four": "4242",
-    "card_brand": "visa",
-    "provider_status": "completed"
+    "card_brand": "visa"
   }
   ```
-- **For Lead Unlocks:** `reference_type` = `lead_unlock`, `reference_id` = unlock ID
-- GDPR compliant: No sensitive payment data stored, only provider transaction IDs
 
 ---
 
-## 7. REQUEST
+## 11. REQUEST
 
-Service requests posted by clients. Anonymized until unlocked by providers.
+Service requests posted by clients. Client contact info is hidden until unlocked.
 
-| Column       | Type      | Constraints  | Description                                                   |
-| ------------ | --------- | ------------ | ------------------------------------------------------------- |
-| id           | string    | PK           | Unique request identifier                                     |
-| user_id      | string    | FK → USER.id | Client who created request                                    |
-| title        | string    | NOT NULL     | Request title                                                 |
-| description  | text      | NOT NULL     | Detailed description                                          |
-| category     | string    | NOT NULL     | Service category                                              |
-| budget_range | string    |              | Expected budget range                                         |
-| location     | string    |              | Service location                                              |
-| status       | enum      | NOT NULL     | `draft`, `published`, `in_progress`, `completed`, `cancelled` |
-| deadline     | timestamp |              | Expected completion deadline                                  |
-| created_at   | timestamp | NOT NULL     | Request creation time                                         |
-| updated_at   | timestamp | NOT NULL     | Last update time                                              |
+| Column       | Type      | Constraints               | Description                                                   |
+| ------------ | --------- | ------------------------- | ------------------------------------------------------------- |
+| id           | string    | PK                        | Unique request identifier                                     |
+| user_id      | string    | FK → USER.id, INDEXED     | Client who created the request                                |
+| category_id  | string    | FK → CATEGORY.id, INDEXED | Service category (normalized)                                 |
+| title        | string    | NOT NULL                  | Request title                                                 |
+| description  | text      | NOT NULL                  | Detailed description of what the client needs                 |
+| budget_range | string    | NULLABLE                  | Expected budget range (e.g. "5000-10000 EGP")                 |
+| location     | string    | NULLABLE                  | Service location (city/area)                                  |
+| status       | enum      | NOT NULL, DEFAULT 'draft' | `draft`, `published`, `in_progress`, `completed`, `cancelled` |
+| deadline     | timestamp | NULLABLE                  | Expected project completion deadline                          |
+| unlock_fee   | decimal   | NOT NULL, DEFAULT 50.00   | Fee charged to providers to unlock this request (EGP)         |
+| created_at   | timestamp | NOT NULL                  | Request creation time                                         |
+| updated_at   | timestamp | NOT NULL                  | Last update time                                              |
+
+**Indexes:** `user_id`, `category_id`, `status`, `(status, category_id)`
+
+**Notes:**
+
+- `unlock_fee` stored per-request to support admin overrides per category
+- Client contact info (from `USER_PROFILE`) only returned after `LEAD_UNLOCK` confirmed for requesting provider
 
 ---
 
-## 8. LEAD_UNLOCK
+## 12. LEAD_UNLOCK
 
-Tracks which providers have paid to unlock and contact specific requests (pay-per-lead model).
+Tracks which providers have paid to unlock a specific request. Core of the pay-per-lead model.
 
-| Column                | Type      | Constraints                       | Description                                  |
-| --------------------- | --------- | --------------------------------- | -------------------------------------------- |
-| id                    | string    | PK                                | Unique unlock identifier                     |
-| request_id            | string    | FK → REQUEST.id, INDEXED          | Unlocked request                             |
-| provider_id           | string    | FK → PROVIDER_PROFILE.id, INDEXED | Provider that unlocked                       |
-| wallet_transaction_id | string    | FK → WALLET_TRANSACTION.id, UK    | Associated wallet debit transaction          |
-| unlock_fee            | decimal   | NOT NULL                          | Fee paid for unlock (EGP)                    |
-| wallet_balance_before | decimal   | NOT NULL                          | Provider wallet balance before unlock        |
-| wallet_balance_after  | decimal   | NOT NULL                          | Provider wallet balance after unlock         |
-| status                | enum      | NOT NULL                          | `pending`, `completed`, `failed`, `refunded` |
-| failed_reason         | string    | NULLABLE                          | Reason if unlock failed                      |
-| refunded_at           | timestamp | NULLABLE                          | Refund timestamp if applicable               |
-| unlocked_at           | timestamp | NOT NULL                          | Initial unlock attempt timestamp             |
-| completed_at          | timestamp | NULLABLE                          | Successful completion timestamp              |
+| Column                | Type      | Constraints                       | Description                                      |
+| --------------------- | --------- | --------------------------------- | ------------------------------------------------ |
+| id                    | string    | PK                                | Unique unlock identifier                         |
+| request_id            | string    | FK → REQUEST.id, INDEXED          | Unlocked request                                 |
+| provider_id           | string    | FK → PROVIDER_PROFILE.id, INDEXED | Provider who unlocked                            |
+| wallet_transaction_id | string    | FK → WALLET_TRANSACTION.id, UK    | Linked debit transaction (balance snapshot here) |
+| unlock_fee            | decimal   | NOT NULL                          | Fee paid at time of unlock (snapshot)            |
+| status                | enum      | NOT NULL                          | `pending`, `completed`, `failed`, `refunded`     |
+| failed_reason         | string    | NULLABLE                          | Reason if unlock failed                          |
+| refunded_at           | timestamp | NULLABLE                          | Refund timestamp if applicable                   |
+| unlocked_at           | timestamp | NOT NULL                          | Initial unlock attempt timestamp                 |
+| completed_at          | timestamp | NULLABLE                          | Successful unlock completion timestamp           |
 
 **Indexes:**
 
-- `request_id + provider_id` (unique composite - prevent duplicate unlocks)
+- `(request_id, provider_id)` — composite unique (prevent duplicate unlocks)
 - `provider_id + status`
 - `wallet_transaction_id` (unique)
 
 **Notes:**
 
-- Each unlock creates a corresponding `WALLET_TRANSACTION` record that debits the wallet
-- Balance snapshots ensure transaction integrity
-- Failed unlocks don't debit wallet (status remains `failed`)
-- Refunds create a new credit `WALLET_TRANSACTION` and update this record
+- `wallet_balance_before/after` removed — read from linked `WALLET_TRANSACTION`
+- Unlock flow is atomic: create `LEAD_UNLOCK` → create `WALLET_TRANSACTION` debit → update wallet balance → update status to `completed`
+- Failed unlocks do not debit wallet
 
 ---
 
-## 9. REVIEW
+## 13. REVIEW
 
-Ratings and feedback from clients about providers after service completion.
+Client ratings and feedback for providers after unlock. Editable for 30 days via soft-delete pattern.
 
-| Column      | Type      | Constraints              | Description              |
-| ----------- | --------- | ------------------------ | ------------------------ |
-| id          | string    | PK                       | Unique review identifier |
-| request_id  | string    | FK → REQUEST.id          | Related request          |
-| client_id   | string    | FK → USER.id             | Client reviewer          |
-| provider_id | string    | FK → PROVIDER_PROFILE.id | Reviewed provider        |
-| rating      | integer   | NOT NULL, 1-5            | Rating score             |
-| comment     | text      |                          | Review comment           |
-| created_at  | timestamp | NOT NULL                 | Review timestamp         |
+| Column      | Type      | Constraints                               | Description                        |
+| ----------- | --------- | ----------------------------------------- | ---------------------------------- |
+| id          | string    | PK                                        | Unique review identifier           |
+| request_id  | string    | FK → REQUEST.id                           | Related service request            |
+| client_id   | string    | FK → USER.id                              | Client who wrote the review        |
+| provider_id | string    | FK → PROVIDER_PROFILE.id                  | Provider being reviewed            |
+| rating      | integer   | NOT NULL, CHECK (rating BETWEEN 1 AND 5)  | Star rating (1–5)                  |
+| comment     | text      | NULLABLE, CHECK (LENGTH(comment) <= 1000) | Review text                        |
+| created_at  | timestamp | NOT NULL                                  | Review submission time             |
+| updated_at  | timestamp | NOT NULL                                  | Last edit time                     |
+| deleted_at  | timestamp | NULLABLE                                  | Soft delete timestamp (if removed) |
 
----
+**Indexes:** `(request_id, client_id, provider_id)` composite unique (one review per combo)
 
-## 10. SUBSCRIPTION
+**Notes:**
 
-Optional subscription plans offering free unlocks and priority listings.
-
-| Column                 | Type      | Constraints              | Description                         |
-| ---------------------- | --------- | ------------------------ | ----------------------------------- |
-| id                     | string    | PK                       | Unique subscription identifier      |
-| provider_id            | string    | FK → PROVIDER_PROFILE.id | Subscribed provider                 |
-| plan_type              | enum      | NOT NULL                 | `free`, `basic`, or `premium`       |
-| free_unlocks_remaining | integer   | DEFAULT 0                | Remaining free unlocks              |
-| priority_listing       | boolean   | DEFAULT false            | Priority in search results          |
-| starts_at              | timestamp | NOT NULL                 | Subscription start date             |
-| expires_at             | timestamp | NOT NULL                 | Subscription expiry date            |
-| status                 | enum      | NOT NULL                 | `active`, `expired`, or `cancelled` |
+- Client can edit/delete review within 30 days (`updated_at` or `deleted_at` ≤ `created_at + 30d`)
+- Admin can soft-delete inappropriate reviews (`deleted_at` set)
+- Exclude `deleted_at IS NOT NULL` rows from all public queries
 
 ---
 
-## 11. NOTIFICATION
+## 14. SUBSCRIPTION
 
-Email/push notifications for platform activities.
+Optional plan subscription for providers. Provides free unlocks and priority listing.
 
-| Column     | Type      | Constraints   | Description                              |
-| ---------- | --------- | ------------- | ---------------------------------------- |
-| id         | string    | PK            | Unique notification identifier           |
-| user_id    | string    | FK → USER.id  | Recipient user                           |
-| type       | enum      | NOT NULL      | `request_update`, `new_unlock`, `review` |
-| title      | string    | NOT NULL      | Notification title                       |
-| message    | text      | NOT NULL      | Notification content                     |
-| is_read    | boolean   | DEFAULT false | Read status                              |
-| metadata   | json      |               | Additional data                          |
-| created_at | timestamp | NOT NULL      | Notification timestamp                   |
+| Column                 | Type      | Constraints                  | Description                          |
+| ---------------------- | --------- | ---------------------------- | ------------------------------------ |
+| id                     | string    | PK                           | Unique subscription identifier       |
+| provider_id            | string    | FK → PROVIDER_PROFILE.id, UK | Subscribed provider (one active max) |
+| plan_type              | enum      | NOT NULL                     | `free`, `basic`, `premium`           |
+| free_unlocks_remaining | integer   | NOT NULL, DEFAULT 0          | Remaining free unlocks this cycle    |
+| priority_listing       | boolean   | NOT NULL, DEFAULT false      | Priority in search results           |
+| billing_cycle          | enum      | NOT NULL, DEFAULT 'monthly'  | `monthly`, `annual`                  |
+| starts_at              | timestamp | NOT NULL                     | Subscription start date              |
+| expires_at             | timestamp | NOT NULL                     | Subscription expiry / next renewal   |
+| status                 | enum      | NOT NULL                     | `active`, `expired`, `cancelled`     |
+| cancelled_at           | timestamp | NULLABLE                     | When cancellation was requested      |
+| created_at             | timestamp | NOT NULL                     | Record creation time                 |
+| updated_at             | timestamp | NOT NULL                     | Last update time                     |
 
----
-
-## 12. ADMIN_LOG
-
-Audit trail for administrative actions (moderation, verification, user management).
-
-| Column      | Type      | Constraints  | Description                                                              |
-| ----------- | --------- | ------------ | ------------------------------------------------------------------------ |
-| id          | string    | PK           | Unique log identifier                                                    |
-| admin_id    | string    | FK → USER.id | Admin who performed action                                               |
-| action_type | enum      | NOT NULL     | `moderate_request`, `approve_provider`, `verify_provider`, `manage_user` |
-| target_id   | string    | NOT NULL     | ID of affected entity                                                    |
-| details     | json      |              | Action details                                                           |
-| created_at  | timestamp | NOT NULL     | Action timestamp                                                         |
+**Indexes:** `provider_id` (unique), `(status, expires_at)`
 
 ---
 
-## Relationships
+## 15. SUBSCRIPTION_HISTORY
 
-| From                 | To                   | Relationship | Description                               |
-| -------------------- | -------------------- | ------------ | ----------------------------------------- |
-| USER                 | REFRESH_TOKEN        | One-to-Many  | User has multiple active sessions         |
-| USER                 | PROVIDER_APPLICATION | One-to-One   | User can submit one provider application  |
-| USER                 | PROVIDER_PROFILE     | One-to-One   | User has optional provider profile        |
-| USER                 | REQUEST              | One-to-Many  | User creates multiple requests            |
-| USER                 | NOTIFICATION         | One-to-Many  | User receives notifications               |
-| USER                 | REVIEW               | One-to-Many  | User writes reviews                       |
-| USER                 | ADMIN_LOG            | One-to-Many  | Admin performs actions                    |
-| PROVIDER_APPLICATION | PROVIDER_PROFILE     | One-to-One   | Application creates profile when approved |
-| PROVIDER_PROFILE     | PROVIDER_WALLET      | One-to-One   | Provider has wallet                       |
-| PROVIDER_PROFILE     | LEAD_UNLOCK          | One-to-Many  | Provider unlocks multiple leads           |
-| PROVIDER_PROFILE     | REVIEW               | One-to-Many  | Provider receives reviews                 |
-| PROVIDER_PROFILE     | SUBSCRIPTION         | One-to-One   | Provider has subscription                 |
-| PROVIDER_WALLET      | WALLET_TRANSACTION   | One-to-Many  | Wallet has transaction history            |
-| WALLET_TRANSACTION   | LEAD_UNLOCK          | One-to-One   | Transaction linked to unlock debit        |
-| REQUEST              | LEAD_UNLOCK          | One-to-Many  | Request unlocked by providers             |
-| REQUEST              | REVIEW               | One-to-Many  | Request reviewed                          |
+Immutable billing event log for subscriptions. Tracks every lifecycle event per subscription.
+
+| Column                | Type      | Constraints                          | Description                                                 |
+| --------------------- | --------- | ------------------------------------ | ----------------------------------------------------------- |
+| id                    | string    | PK                                   | Unique history record identifier                            |
+| subscription_id       | string    | FK → SUBSCRIPTION.id, INDEXED        | Parent subscription                                         |
+| provider_id           | string    | FK → PROVIDER_PROFILE.id             | Provider (denormalized for query)                           |
+| event_type            | enum      | NOT NULL                             | `created`, `renewed`, `upgraded`, `downgraded`, `cancelled` |
+| plan_from             | enum      | NULLABLE                             | Previous plan (null on first creation)                      |
+| plan_to               | enum      | NOT NULL                             | New/current plan                                            |
+| amount_charged        | decimal   | NULLABLE                             | Amount charged for this event (EGP)                         |
+| wallet_transaction_id | string    | FK → WALLET_TRANSACTION.id, NULLABLE | Linked payment transaction                                  |
+| created_at            | timestamp | NOT NULL                             | Event timestamp                                             |
+
+**Indexes:** `subscription_id`, `provider_id`
+
+---
+
+## 16. NOTIFICATION
+
+In-app notifications for all platform events.
+
+| Column     | Type      | Constraints             | Description                                    |
+| ---------- | --------- | ----------------------- | ---------------------------------------------- |
+| id         | string    | PK                      | Unique notification identifier                 |
+| user_id    | string    | FK → USER.id, INDEXED   | Recipient user                                 |
+| type       | enum      | NOT NULL                | See types below                                |
+| title      | string    | NOT NULL                | Notification title                             |
+| message    | text      | NOT NULL                | Notification body                              |
+| is_read    | boolean   | NOT NULL, DEFAULT false | Read status                                    |
+| metadata   | json      | NULLABLE                | Contextual data (e.g. request_id, provider_id) |
+| created_at | timestamp | NOT NULL                | Notification timestamp                         |
+
+**Notification Types:**
+| Enum Value | Triggered When |
+| --------------------------- | --------------------------------------------- |
+| `email_verified` | User verifies email |
+| `application_approved` | Provider application is approved |
+| `application_rejected` | Provider application is rejected |
+| `request_unlocked` | A provider unlocks the client's request |
+| `low_wallet_balance` | Provider wallet drops below 100 EGP |
+| `subscription_renewed` | Subscription auto-renews |
+| `subscription_expiring` | Subscription expires in ≤ 7 days |
+| `new_review_received` | Provider receives a new client review |
+| `request_status_changed` | Request status changes (e.g. → completed) |
+| `refund_processed` | Admin processes a refund for an unlock |
+
+**Indexes:** `user_id`, `(user_id, is_read)`, `created_at`
+
+---
+
+## 17. ADMIN_LOG
+
+Immutable audit trail of all administrative actions.
+
+| Column      | Type      | Constraints           | Description                                                                                                                                                                         |
+| ----------- | --------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id          | string    | PK                    | Unique log identifier                                                                                                                                                               |
+| admin_id    | string    | FK → USER.id, INDEXED | Admin who performed the action                                                                                                                                                      |
+| action_type | enum      | NOT NULL              | `approve_provider`, `reject_provider`, `verify_provider`, `unverify_provider`, `moderate_request`, `remove_review`, `process_refund`, `block_user`, `unblock_user`, `adjust_wallet` |
+| target_type | string    | NOT NULL              | Entity type affected (`user`, `provider`, `request`, `review`, `wallet`)                                                                                                            |
+| target_id   | string    | NOT NULL              | ID of the affected entity                                                                                                                                                           |
+| details     | json      | NULLABLE              | Action-specific details (e.g. rejection reason, refund amount)                                                                                                                      |
+| created_at  | timestamp | NOT NULL              | Action timestamp                                                                                                                                                                    |
+
+**Indexes:** `admin_id`, `(action_type, created_at)`, `(target_type, target_id)`
+
+**Notes:** Records are immutable — never updated or deleted
+
+---
+
+## Entity Relationships
+
+| From                 | To                   | Type        | Description                                        |
+| -------------------- | -------------------- | ----------- | -------------------------------------------------- |
+| USER                 | USER_AUTH            | One-to-One  | User has one auth record                           |
+| USER                 | USER_PROFILE         | One-to-One  | User has one profile record                        |
+| USER                 | REFRESH_TOKEN        | One-to-Many | User has multiple active sessions                  |
+| USER                 | PROVIDER_APPLICATION | One-to-One  | User can submit one provider application           |
+| USER                 | PROVIDER_PROFILE     | One-to-One  | Approved user has one provider profile             |
+| USER                 | REQUEST              | One-to-Many | Client creates multiple service requests           |
+| USER                 | REVIEW (client)      | One-to-Many | Client writes reviews                              |
+| USER                 | NOTIFICATION         | One-to-Many | User receives notifications                        |
+| USER                 | ADMIN_LOG            | One-to-Many | Admin performs logged actions                      |
+| PROVIDER_APPLICATION | PROVIDER_PROFILE     | One-to-One  | Approved application spawns a profile              |
+| PROVIDER_PROFILE     | PROVIDER_SERVICE     | One-to-Many | Provider offers multiple service categories        |
+| PROVIDER_PROFILE     | PROVIDER_WALLET      | One-to-One  | Provider has one wallet                            |
+| PROVIDER_PROFILE     | LEAD_UNLOCK          | One-to-Many | Provider unlocks multiple requests                 |
+| PROVIDER_PROFILE     | REVIEW (provider)    | One-to-Many | Provider receives reviews                          |
+| PROVIDER_PROFILE     | SUBSCRIPTION         | One-to-One  | Provider has one active subscription               |
+| PROVIDER_WALLET      | WALLET_TRANSACTION   | One-to-Many | Wallet has full transaction history                |
+| WALLET_TRANSACTION   | LEAD_UNLOCK          | One-to-One  | Debit transaction linked to an unlock              |
+| WALLET_TRANSACTION   | SUBSCRIPTION_HISTORY | One-to-One  | Payment transaction linked to a subscription event |
+| REQUEST              | LEAD_UNLOCK          | One-to-Many | Request can be unlocked by multiple providers      |
+| REQUEST              | REVIEW               | One-to-Many | Request can have multiple reviews                  |
+| CATEGORY             | REQUEST              | One-to-Many | Category classifies many requests                  |
+| CATEGORY             | PROVIDER_SERVICE     | One-to-Many | Category used in many provider service offerings   |
+| SUBSCRIPTION         | SUBSCRIPTION_HISTORY | One-to-Many | Subscription has a full lifecycle event log        |
 
 ---
 
 ## Key Business Rules
 
-1. **Provider Application Flow**:
-   - Users register as `client` role initially
-   - Submit `PROVIDER_APPLICATION` to become agency
-   - Admin reviews and approves/rejects application
-   - Upon approval: `PROVIDER_PROFILE` + `PROVIDER_WALLET` created, user role updated to `provider`
-   - Rejected applications can be resubmitted
-2. **Pay-per-lead**: Providers pay to unlock request details and contact information
-3. **Reviews**: Only clients can review providers, tied to specific requests
-4. **Verification**: Providers can earn verification badge after additional checks (separate from approval)
-5. **Subscriptions**: Optional; provide free unlocks and priority listing benefits
-6. **Authentication**:
-   - JWT access tokens (short-lived, 15-30 min) for API authentication
-   - Refresh tokens (long-lived, 7-30 days) stored in `REFRESH_TOKEN` table
-   - OAuth users may not have password_hash (social login only)
-   - Email verification required before posting requests or unlocking leads
-7. **Wallet & Payments**:
-   - Providers must maintain positive wallet balance to unlock leads
-   - All financial operations (deposits, unlocks, refunds) logged in `WALLET_TRANSACTION`
-   - External payment flow: Paymob/Stripe webhook → `WALLET_TRANSACTION` (deposit) → `PROVIDER_WALLET` balance update
-   - Lead unlock flow: `LEAD_UNLOCK` → `WALLET_TRANSACTION` (debit) → `PROVIDER_WALLET` balance update
-   - Refund flow: Admin action → `WALLET_TRANSACTION` (credit) → `PROVIDER_WALLET` balance update
-   - No sensitive payment data stored (GDPR compliant) - only provider transaction IDs
+1. **Provider Flow**: `client` registers → submits `PROVIDER_APPLICATION` → admin approves → `PROVIDER_PROFILE` + `PROVIDER_WALLET` created atomically → user role updated to `provider`
+2. **Pay-per-lead**: Providers pay `REQUEST.unlock_fee` to unlock client contact info. Unlock is atomic across `LEAD_UNLOCK`, `WALLET_TRANSACTION`, and `PROVIDER_WALLET`.
+3. **Anonymization**: `USER_PROFILE` contact data is only returned in request responses after a confirmed `LEAD_UNLOCK` for that provider.
+4. **Reviews**: Client can only review a provider if a `LEAD_UNLOCK` (status = `completed`) exists for that `(request_id, provider_id)` pair. Editable/deletable within 30 days.
+5. **Subscriptions**: `free_unlocks_remaining` is consumed before wallet balance. Resets on each renewal cycle.
+6. **Authentication**: Short-lived JWT access tokens (30 min) + long-lived refresh tokens (7 days) stored hashed in `REFRESH_TOKEN` table.
+7. **Wallet Integrity**: All balance changes are recorded in `WALLET_TRANSACTION`. Balance can be verified at any time by summing all transactions for a wallet.
+8. **Categories**: All request categories and provider services must reference the `CATEGORY` table. Free-text category strings are not permitted.
 
 ---
 
 ## Implementation Notes
 
-- Use MongoDB for flexible schema (requests, provider profiles) or PostgreSQL for strict relational integrity
-- `json` fields store flexible metadata (verification docs, payment details)
-- All timestamps in UTC
-- Consider soft deletes for requests and users
-- Index on: `REQUEST.status`, `REQUEST.category`, `PROVIDER_PROFILE.provider_type`, `PROVIDER_APPLICATION.application_status`, `LEAD_UNLOCK.provider_id`
-- **Provider Approval Workflow**:
-  - Implement admin dashboard for reviewing pending applications
-  - Send email notifications on application status changes
-  - Atomic transaction when approving: create profile + wallet + update user role
-  - Archive rejected applications for audit trail
-- **Wallet Management**:
-  - Implement database transactions for wallet balance updates to ensure atomicity
-  - Use row-level locking when updating wallet balance to prevent race conditions
-  - Store monetary values as decimal with proper precision (e.g., DECIMAL(10,2) for EGP)
-  - Implement idempotency keys for payment operations (prevent duplicate deposits from webhooks)
-  - Regularly reconcile wallet balance with transaction history sum
-  - Implement minimum balance thresholds and low-balance notifications
-  - Prevent negative balances through validation before unlock operations
-- **Payment Integration (GDPR Compliant)**:
-  - Never store card numbers, CVV, or sensitive payment data
-  - Store only provider transaction IDs and minimal metadata (last 4 digits, brand)
-  - Use Paymob/Stripe hosted payment pages or tokenization
-  - Process payments via provider SDKs/APIs, receive webhooks for status updates
-  - Log all payment events in `WALLET_TRANSACTION.metadata` for debugging
-- **Authentication Security**:
-  - Implement rate limiting on authentication endpoints
-  - Use bcrypt/argon2 for password hashing with proper salt rounds
-  - Store refresh tokens hashed in database for security
-  - Implement CSRF protection for OAuth flows
-  - Consider adding 2FA (Two-Factor Authentication) in future phases
+- **Database**: PostgreSQL recommended for strict relational integrity, transactions, and row-level locking
+- **Monetary values**: Use `DECIMAL(12, 2)` for all EGP amounts
+- **Timestamps**: All in UTC
+- **Soft deletes**: Applied to `REVIEW` only; use hard deletes elsewhere (with cascade rules)
+- **Idempotency**: Implement idempotency keys on payment deposit endpoints to prevent duplicate webhook processing
+- **Indexes**: Index all FK columns; composite indexes on high-query paths (`status + category_id`, `provider_id + status`)
+- **GDPR**: No raw card data stored anywhere. Payment metadata stores only last 4 digits, card brand, and provider transaction IDs
