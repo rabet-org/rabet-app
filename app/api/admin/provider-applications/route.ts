@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { authenticate, isAuthenticated, requireRole } from "@/lib/auth";
 import { ok, ApiError } from "@/lib/api-response";
 
+export const dynamic = "force-dynamic";
 const VALID_STATUSES = ["pending", "approved", "rejected"] as const;
 type AppStatus = (typeof VALID_STATUSES)[number];
 
