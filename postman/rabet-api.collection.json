@@ -97,6 +97,17 @@
       "value": "",
       "type": "string",
       "description": "Login as a platform administrator and place the token here."
+    },
+    {
+      "key": "providerProfileId",
+      "value": "",
+      "type": "string",
+      "description": "The provider profile ID to verify or adjust wallet for."
+    },
+    {
+      "key": "unlockId",
+      "value": "",
+      "type": "string"
     }
   ],
   "event": [
@@ -1442,12 +1453,8 @@
       ]
     },
     {
-      "info": {
-        "_postman_id": "rabet-requests",
-        "name": "7. Service Requests",
-        "description": "Endpoints for clients to post requests and providers to browse them.",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-      },
+      "name": "7. Service Requests",
+      "description": "Endpoints for clients to post requests and providers to browse them.",
       "item": [
         {
           "name": "7.1 Create Request (Client)",
@@ -1608,12 +1615,8 @@
       ]
     },
     {
-      "info": {
-        "_postman_id": "rabet-unlocks",
-        "name": "8. Lead Unlocks",
-        "description": "Endpoints simulating the core marketplace transaction: Providers paying to unlock Client contact info.",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-      },
+      "name": "8. Lead Unlocks",
+      "description": "Endpoints simulating the core marketplace transaction: Providers paying to unlock Client contact info.",
       "item": [
         {
           "name": "8.1 Provider Unlocks a Lead",
@@ -1721,12 +1724,8 @@
       ]
     },
     {
-      "info": {
-        "_postman_id": "rabet-reviews",
-        "name": "9. Reviews & Ratings",
-        "description": "Endpoints to manage Provider reviews after a successful Lead Unlock.",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-      },
+      "name": "9. Reviews & Ratings",
+      "description": "Endpoints to manage Provider reviews after a successful Lead Unlock.",
       "item": [
         {
           "name": "9.1 Create Review (Client)",
@@ -1863,12 +1862,8 @@
       ]
     },
     {
-      "info": {
-        "_postman_id": "rabet-notifications",
-        "name": "11. Notifications",
-        "description": "Endpoints to manage user notifications (alerts for unlocks, reviews, etc.).",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-      },
+      "name": "11. Notifications",
+      "description": "Endpoints to manage user notifications (alerts for unlocks, reviews, etc.).",
       "item": [
         {
           "name": "11.1 Get My Notifications",
@@ -2003,137 +1998,552 @@
       ]
     },
     {
-      "info": {
-        "_postman_id": "rabet-admin-apps",
-        "name": "12. Admin Endpoints (App Management)",
-        "description": "Endpoints for an Administrator to review, approve, and reject Provider Applications.",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-      },
+      "name": "12. Admin Endpoints",
+      "description": "All administrative control endpoints for the Rabet platform.",
       "item": [
         {
-          "name": "12.1 List Provider Applications",
-          "event": [
+          "name": "App Management",
+          "description": "Endpoints for an Administrator to review, approve, and reject Provider Applications.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
-                  "if (pm.response.code === 200) {",
-                  "  const res = pm.response.json();",
-                  "  if (res.data.length > 0) {",
-                  "    pm.collectionVariables.set('applicationId', res.data[0].id);",
-                  "    console.log('✅ Grabbed newest Application ID:', res.data[0].id);",
-                  "  } else {",
-                  "    console.log('⚠️ No applications found. Cannot test approve/reject');",
-                  "  }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/admin/provider-applications?status=pending&page=1&limit=20",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin",
-                "provider-applications"
-              ],
-              "query": [
+              "name": "12.1 List Provider Applications",
+              "event": [
                 {
-                  "key": "status",
-                  "value": "pending"
-                },
-                {
-                  "key": "provider_type",
-                  "value": "agency",
-                  "disabled": true
-                },
-                {
-                  "key": "page",
-                  "value": "1"
-                },
-                {
-                  "key": "limit",
-                  "value": "20"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                      "if (pm.response.code === 200) {",
+                      "  const res = pm.response.json();",
+                      "  if (res.data.length > 0) {",
+                      "    pm.collectionVariables.set('applicationId', res.data[0].id);",
+                      "    console.log('✅ Grabbed newest Application ID:', res.data[0].id);",
+                      "  } else {",
+                      "    console.log('⚠️ No applications found. Cannot test approve/reject');",
+                      "  }",
+                      "}"
+                    ]
+                  }
                 }
-              ]
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/provider-applications?status=pending&page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "provider-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "pending"
+                    },
+                    {
+                      "key": "provider_type",
+                      "value": "agency",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "12.2 Approve Application",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/provider-applications/{{applicationId}}/approve",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "provider-applications",
+                    "{{applicationId}}",
+                    "approve"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"All verification documents check out. Welcome to Rabet!\"\n}"
+                }
+              }
+            },
+            {
+              "name": "12.3 Reject Application",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/provider-applications/{{applicationId}}/reject",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "provider-applications",
+                    "{{applicationId}}",
+                    "reject"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rejection_reason\": \"Incomplete documents. Please re-upload your National ID card.\"\n}"
+                }
+              }
             }
-          }
+          ]
         },
         {
-          "name": "12.2 Approve Application",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+          "name": "Provider Trust",
+          "description": "Endpoints to manage Provider Trust & Finances (Verify, Unverify, Adjust Wallet).",
+          "item": [
+            {
+              "name": "12.4 Verify Provider",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/providers/{{providerProfileId}}/verify",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "providers",
+                    "{{providerProfileId}}",
+                    "verify"
+                  ]
+                }
               }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/admin/provider-applications/{{applicationId}}/approve",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin",
-                "provider-applications",
-                "{{applicationId}}",
-                "approve"
-              ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"notes\": \"All verification documents check out. Welcome to Rabet!\"\n}"
+            {
+              "name": "12.5 Unverify Provider",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/providers/{{providerProfileId}}/verify",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "providers",
+                    "{{providerProfileId}}",
+                    "verify"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Excessive negative reviews require trust re-evaluation.\"\n}"
+                }
+              }
+            },
+            {
+              "name": "12.10 Manual Wallet Adjustment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/providers/{{providerProfileId}}/wallet/adjust",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "providers",
+                    "{{providerProfileId}}",
+                    "wallet",
+                    "adjust"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 150.00,\n  \"reason\": \"Compensation for reported technical issue during checkout.\"\n}"
+                }
+              }
             }
-          }
+          ]
         },
         {
-          "name": "12.3 Reject Application",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+          "name": "Moderation",
+          "description": "Endpoints to manage platform safety: Blocking users, removing inappropriate reviews, canceling bad requests, and refunding unlocks.",
+          "item": [
+            {
+              "name": "12.6 Block User",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{userId}}/block",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "{{userId}}",
+                    "block"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Repeated violations of Terms of Service\"\n}"
+                }
               }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/admin/provider-applications/{{applicationId}}/reject",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin",
-                "provider-applications",
-                "{{applicationId}}",
-                "reject"
-              ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rejection_reason\": \"Incomplete documents. Please re-upload your National ID card.\"\n}"
+            {
+              "name": "12.6 Unblock User",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/users/{{userId}}/block",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "{{userId}}",
+                    "block"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "12.7 Moderate Request",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/requests/{{requestId}}/moderate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "requests",
+                    "{{requestId}}",
+                    "moderate"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"cancelled\",\n  \"reason\": \"This request violates platform safety guidelines.\"\n}"
+                }
+              }
+            },
+            {
+              "name": "12.8 Remove Review",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/reviews/{{reviewId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews",
+                    "{{reviewId}}"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Review contains swearing / abusive language.\"\n}"
+                }
+              }
+            },
+            {
+              "name": "12.9 Refund Unlock",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/unlocks/{{unlockId}}/refund",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "unlocks",
+                    "{{unlockId}}",
+                    "refund"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"The client provided a fake phone number.\"\n}"
+                }
+              }
             }
-          }
+          ]
+        },
+        {
+          "name": "Audit & Platform",
+          "description": "Endpoints for Platform metrics, Audit Logging, and Category Management.",
+          "item": [
+            {
+              "name": "12.11 Get Admin Audit Logs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/logs?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "logs"
+                  ],
+                  "query": [
+                    {
+                      "key": "action_type",
+                      "value": "verify_provider",
+                      "disabled": true
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "12.12 Get Platform Analytics",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/analytics",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "analytics"
+                  ],
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2023-01-01T00:00:00.000Z",
+                      "disabled": true
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2023-12-31T23:59:59.999Z",
+                      "disabled": true
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "12.13 Update Category",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/categories/{{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "categories",
+                    "{{categoryId}}"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Plumbing & Heating\",\n  \"is_active\": false\n}"
+                }
+              }
+            },
+            {
+              "name": "12.14 Delete Category",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/categories/{{categoryId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "categories",
+                    "{{categoryId}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "12.15 Create Category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/admin/categories",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Appliance Repair\",\n  \"slug\": \"appliance-repair\",\n  \"description\": \"Fixing refrigerators, ovens, etc.\",\n  \"icon\": \"https://example.com/icon.svg\",\n  \"is_active\": true\n}"
+                }
+              }
+            }
+          ]
         }
       ]
     }
