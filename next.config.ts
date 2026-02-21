@@ -4,7 +4,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  serverExternalPackages: ["pg", "jsonwebtoken", "bcryptjs", "cloudinary"],
+  serverExternalPackages: [
+    "@prisma/client",
+    "@prisma/adapter-pg",
+    "pg",
+    "jsonwebtoken",
+    "bcryptjs",
+    "cloudinary",
+    "resend",
+  ],
 };
 
 export default nextConfig;
