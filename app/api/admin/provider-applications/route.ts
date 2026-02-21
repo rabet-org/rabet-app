@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       : await db.providerApplication.count();
 
     return ok({
-      data: applications.map((app) => ({
+      data: applications.map((app: any) => ({
         id: app.id,
         user_id: app.user_id,
         provider_type: app.provider_type,
