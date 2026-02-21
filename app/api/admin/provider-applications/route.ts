@@ -32,25 +32,35 @@ export async function GET(req: NextRequest) {
     );
     const skip = (page - 1) * limit;
 
-    const where = status ? { application_status: status } : {};
-
-    const [applications, total] = await Promise.all([
-      db.providerApplication.findMany({
-        where,
-        include: {
-          user: {
-            select: {
-              email: true,
-              profile: { select: { full_name: true, phone: true } },
-            },
-          },
+    const includeUser = {
+      user: {
+        select: {
+          email: true,
+          profile: { select: { full_name: true, phone: true } },
         },
-        orderBy: { created_at: "desc" },
-        skip,
-        take: limit,
-      }),
-      db.providerApplication.count({ where }),
-    ]);
+      },
+    } as const;
+
+    const applications = status
+      ? await db.providerApplication.findMany({
+          where: { application_status: status },
+          include: includeUser,
+          orderBy: { created_at: "desc" },
+          skip,
+          take: limit,
+        })
+      : await db.providerApplication.findMany({
+          include: includeUser,
+          orderBy: { created_at: "desc" },
+          skip,
+          take: limit,
+        });
+
+    const total = status
+      ? await db.providerApplication.count({
+          where: { application_status: status },
+        })
+      : await db.providerApplication.count();
 
     return ok({
       data: applications.map((app) => ({
