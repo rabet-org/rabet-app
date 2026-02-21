@@ -2,7 +2,9 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { authenticate, isAuthenticated, requireRole } from "@/lib/auth";
 import { ok, ApiError } from "@/lib/api-response";
-import { ApplicationStatus } from "@prisma/client";
+
+const VALID_STATUSES = ["pending", "approved", "rejected"] as const;
+type AppStatus = (typeof VALID_STATUSES)[number];
 
 /**
  * GET /api/admin/provider-applications
@@ -18,7 +20,11 @@ export async function GET(req: NextRequest) {
     if (roleError) return roleError;
 
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get("status") as ApplicationStatus | null;
+    const statusParam = searchParams.get("status");
+    const status =
+      statusParam && VALID_STATUSES.includes(statusParam as AppStatus)
+        ? (statusParam as AppStatus)
+        : null;
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
     const limit = Math.min(
       100,
