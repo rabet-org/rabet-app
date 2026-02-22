@@ -1,21 +1,20 @@
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { POST as loginHandler } from "@/app/api/auth/login/route";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const { email, password } = body;
 
-    // Forward the request to our backend login endpoint
-    const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
-    const res = await fetch(`${baseUrl}/auth/login`, {
+    // Call the login handler directly (avoids self-HTTP fetch which breaks in serverless/Vercel)
+    const loginReq = new NextRequest(new URL("/api/auth/login", req.url), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: req.headers,
       body: JSON.stringify({ email, password }),
     });
 
+    const res = await loginHandler(loginReq);
     const data = await res.json();
 
     if (!res.ok) {
