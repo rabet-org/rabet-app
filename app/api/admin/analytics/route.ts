@@ -6,18 +6,16 @@ import { Prisma } from "@prisma/client";
 
 /**
  * GET /api/admin/analytics
- * Computes high-level platform statistics and financial aggregates.
+ * Computes high-level platform statistics, financial aggregates, and time-series data.
  */
 export async function GET(req: NextRequest) {
   try {
-    // 1. Authenticate Request
     const userPayload = await authenticate(req);
     if (!isAuthenticated(userPayload)) return userPayload;
 
     const roleError = requireRole(userPayload, "admin");
     if (roleError) return roleError;
 
-    // 2. Extract Date Filters
     const { searchParams } = new URL(req.url);
     const startDateRaw = searchParams.get("start_date");
     const endDateRaw = searchParams.get("end_date");
@@ -26,44 +24,41 @@ export async function GET(req: NextRequest) {
     if (startDateRaw) periodFilter.gte = new Date(startDateRaw);
     if (endDateRaw) periodFilter.lte = new Date(endDateRaw);
 
-    // Reusable where clause for date period
     const hasDates = !!startDateRaw || !!endDateRaw;
     const dateBound = hasDates ? periodFilter : undefined;
 
-    // 3. Execute Parallel Aggregations
+    // For time-series: use the selected period or default to last 30 days
+    const tsEnd = endDateRaw ? new Date(endDateRaw) : new Date();
+    const tsStart = startDateRaw
+      ? new Date(startDateRaw)
+      : new Date(new Date().setDate(tsEnd.getDate() - 29));
+
     const [
       totalUsers,
       totalClients,
       totalProviders,
       totalAdmins,
       newUsersPeriod,
-
       pendingApps,
       approvedApps,
       rejectedApps,
-
       totalReqs,
       publishedReqs,
       inProgressReqs,
       completedReqs,
-
       totalReqsByCategoryRaw,
-
       totalUnlocks,
       unlocksThisPeriod,
       totalUnlockRevenueAgg,
-
       totalDepositsAgg,
       totalSpentSubsAgg,
     ] = await Promise.all([
-      // Users
       db.user.count(),
       db.user.count({ where: { role: "client" } }),
       db.user.count({ where: { role: "provider" } }),
       db.user.count({ where: { role: "admin" } }),
       db.user.count({ where: { created_at: dateBound } }),
 
-      // Applications
       db.providerApplication.count({
         where: { application_status: "pending" },
       }),
@@ -74,19 +69,13 @@ export async function GET(req: NextRequest) {
         where: { application_status: "rejected" },
       }),
 
-      // Requests
       db.request.count(),
       db.request.count({ where: { status: "published" } }),
       db.request.count({ where: { status: "in_progress" } }),
       db.request.count({ where: { status: "completed" } }),
 
-      // Requests grouped by Category
-      db.request.groupBy({
-        by: ["category_id"],
-        _count: { id: true },
-      }),
+      db.request.groupBy({ by: ["category_id"], _count: { id: true } }),
 
-      // Unlocks (revenue flow)
       db.leadUnlock.count({ where: { status: "completed" } }),
       db.leadUnlock.count({
         where: { status: "completed", unlocked_at: dateBound },
@@ -96,28 +85,71 @@ export async function GET(req: NextRequest) {
         where: { status: "completed" },
       }),
 
-      // Financials (Deposits & Subscriptions) via Wallet Transaction type
       db.walletTransaction.aggregate({
         _sum: { amount: true },
         where: { type: "deposit" },
       }),
       db.walletTransaction.aggregate({
         _sum: { amount: true },
-        where: {
-          type: "debit",
-          reference_type: "subscription_payment",
-        },
+        where: { type: "debit", reference_type: "subscription_payment" },
       }),
     ]);
 
-    // Format Category breakdown (Fetching raw category info manually for labels)
+    // ── Time-series: daily aggregates via raw SQL ─────────────────────────────
+    type DayRow = { day: Date; count: bigint };
+
+    const [usersTimeline, requestsTimeline, unlocksTimeline] =
+      await Promise.all([
+        db.$queryRaw<DayRow[]>`
+        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
+        FROM "public"."users"
+        WHERE created_at >= ${tsStart} AND created_at <= ${tsEnd}
+        GROUP BY day ORDER BY day ASC
+      `,
+        db.$queryRaw<DayRow[]>`
+        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
+        FROM "public"."requests"
+        WHERE created_at >= ${tsStart} AND created_at <= ${tsEnd}
+        GROUP BY day ORDER BY day ASC
+      `,
+        db.$queryRaw<DayRow[]>`
+        SELECT DATE_TRUNC('day', unlocked_at) AS day, COUNT(*)::bigint AS count
+        FROM "public"."lead_unlocks"
+        WHERE status = 'completed' AND unlocked_at >= ${tsStart} AND unlocked_at <= ${tsEnd}
+        GROUP BY day ORDER BY day ASC
+      `,
+      ]);
+
+    // Build a full date spine so gaps in the data show as zero
+    function buildTimeline(rows: DayRow[]) {
+      const map = new Map<string, number>();
+      rows.forEach((r) => {
+        const key = r.day.toISOString().split("T")[0];
+        map.set(key, Number(r.count));
+      });
+
+      const result: { date: string; count: number }[] = [];
+      const cursor = new Date(tsStart);
+      cursor.setHours(0, 0, 0, 0);
+      const end = new Date(tsEnd);
+      end.setHours(23, 59, 59, 999);
+
+      while (cursor <= end) {
+        const key = cursor.toISOString().split("T")[0];
+        result.push({ date: key, count: map.get(key) ?? 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return result;
+    }
+
+    // Category labels
     let categoryMap: Record<string, string> = {};
     if (totalReqsByCategoryRaw.length > 0) {
-      const catIdsQuery = totalReqsByCategoryRaw
+      const catIds = totalReqsByCategoryRaw
         .filter((g) => g.category_id)
         .map((g) => g.category_id!);
       const categories = await db.category.findMany({
-        where: { id: { in: catIdsQuery } },
+        where: { id: { in: catIds } },
         select: { id: true, slug: true },
       });
       categories.forEach((c) => (categoryMap[c.id] = c.slug));
@@ -143,6 +175,7 @@ export async function GET(req: NextRequest) {
           admin: totalAdmins,
         },
         new_this_period: newUsersPeriod,
+        timeline: buildTimeline(usersTimeline),
       },
       provider_applications: {
         pending: pendingApps,
@@ -157,12 +190,14 @@ export async function GET(req: NextRequest) {
           completed: completedReqs,
         },
         by_category: byCategory,
+        timeline: buildTimeline(requestsTimeline),
       },
       unlocks: {
         total: totalUnlocks,
         this_period: unlocksThisPeriod,
         total_revenue_egp:
           totalUnlockRevenueAgg._sum?.unlock_fee?.toNumber() || 0,
+        timeline: buildTimeline(unlocksTimeline),
       },
       financials: {
         total_deposits: totalDepositsAgg._sum?.amount?.toNumber() || 0,

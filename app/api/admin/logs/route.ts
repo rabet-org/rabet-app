@@ -69,7 +69,11 @@ export async function GET(req: NextRequest) {
         where,
         include: {
           admin: {
-            select: { id: true, profile: { select: { full_name: true } } },
+            select: {
+              id: true,
+              email: true,
+              profile: { select: { full_name: true } },
+            },
           },
         },
         orderBy: { created_at: "desc" },
@@ -84,6 +88,7 @@ export async function GET(req: NextRequest) {
         id: log.id,
         admin: {
           id: log.admin.id,
+          email: log.admin.email,
           full_name: log.admin.profile?.full_name ?? "Admin User",
         },
         action_type: log.action_type,

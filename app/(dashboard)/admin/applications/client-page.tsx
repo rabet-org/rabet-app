@@ -133,7 +133,7 @@ export default function AdminApplicationsClient({
   };
 
   return (
-    <div className="flex flex-col h-full bg-neutral-50/50 dark:bg-background overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background">
       <Topbar title="Provider Applications" />
       <main className="flex-1 p-6 w-full max-w-7xl mx-auto space-y-6 overflow-y-auto pb-20">
         <div>

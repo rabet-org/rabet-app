@@ -6,7 +6,7 @@ import {
   SquaresFourIcon,
   UsersIcon,
   FileTextIcon,
-  ReceiptIcon,
+  ClipboardTextIcon,
 } from "@phosphor-icons/react";
 
 const adminLinks: SidebarLink[] = [
@@ -30,9 +30,9 @@ const adminLinks: SidebarLink[] = [
     category: "Management",
   },
   {
-    label: "Finance",
-    href: "/admin/finance",
-    icon: ReceiptIcon,
+    label: "Audit Logs",
+    href: "/admin/logs",
+    icon: ClipboardTextIcon,
     category: "Management",
   },
 ];

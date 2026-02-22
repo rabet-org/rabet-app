@@ -201,7 +201,7 @@ export default function AdminUsersClient({
   };
 
   return (
-    <div className="flex flex-col h-full bg-neutral-50/50 dark:bg-background overflow-hidden relative">
+    <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background relative">
       <Topbar title="User Management" />
       <main className="flex-1 p-6 w-full max-w-7xl mx-auto space-y-6 overflow-y-auto pb-20">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
