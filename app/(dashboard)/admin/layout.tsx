@@ -11,6 +11,10 @@ import {
   BuildingsIcon,
   ListChecksIcon,
   StarIcon,
+  Coins,
+  Receipt,
+  ArrowCounterClockwise,
+  ShieldCheckIcon,
 } from "@phosphor-icons/react";
 
 const adminLinks: SidebarLink[] = [
@@ -58,9 +62,33 @@ const adminLinks: SidebarLink[] = [
     category: "Content",
   },
   {
+    label: "Financials",
+    icon: Coins,
+    category: "System",
+    children: [
+      {
+        label: "Ledger",
+        href: "/admin/financials/ledger",
+        icon: Receipt,
+        exactMatch: true,
+      },
+      {
+        label: "Refunds",
+        href: "/admin/financials/refunds",
+        icon: ArrowCounterClockwise,
+      },
+    ],
+  },
+  {
     label: "Audit Logs",
     href: "/admin/logs",
     icon: ClipboardTextIcon,
+    category: "System",
+  },
+  {
+    label: "Admin Team",
+    href: "/admin/team",
+    icon: ShieldCheckIcon,
     category: "System",
   },
 ];

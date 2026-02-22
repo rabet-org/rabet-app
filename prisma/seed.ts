@@ -26,6 +26,7 @@ import bcrypt from "bcrypt";
 const NUM_CATEGORIES = 10;
 const NUM_CLIENTS = 15;
 const NUM_PROVIDERS = 10;
+const NUM_PENDING_APPLICANTS = 5;
 const NUM_REQUESTS = 40; // Total cross-category
 const PASSWORD_HASH = bcrypt.hashSync("password123", 10);
 
@@ -55,16 +56,66 @@ async function main() {
   // 1. CREATE CATEGORIES
   console.log("➡️ Seeding Categories...");
   const categoryData = [
-    { name: "Web Development", slug: "web-development", icon: "💻", description: "Website and web application development services" },
-    { name: "Mobile Apps", slug: "mobile-apps", icon: "📱", description: "iOS and Android mobile application development" },
-    { name: "Graphic Design", slug: "graphic-design", icon: "🎨", description: "Logo, branding, and visual design services" },
-    { name: "Digital Marketing", slug: "digital-marketing", icon: "📈", description: "SEO, social media, and online marketing" },
-    { name: "Content Writing", slug: "content-writing", icon: "✍️", description: "Blog posts, articles, and copywriting" },
-    { name: "Video Production", slug: "video-production", icon: "🎬", description: "Video editing and production services" },
-    { name: "Photography", slug: "photography", icon: "📸", description: "Professional photography services" },
-    { name: "Translation", slug: "translation", icon: "🌐", description: "Document and content translation" },
-    { name: "Consulting", slug: "consulting", icon: "💼", description: "Business and technical consulting" },
-    { name: "Legal Services", slug: "legal-services", icon: "⚖️", description: "Legal advice and documentation" },
+    {
+      name: "Web Development",
+      slug: "web-development",
+      icon: "💻",
+      description: "Website and web application development services",
+    },
+    {
+      name: "Mobile Apps",
+      slug: "mobile-apps",
+      icon: "📱",
+      description: "iOS and Android mobile application development",
+    },
+    {
+      name: "Graphic Design",
+      slug: "graphic-design",
+      icon: "🎨",
+      description: "Logo, branding, and visual design services",
+    },
+    {
+      name: "Digital Marketing",
+      slug: "digital-marketing",
+      icon: "📈",
+      description: "SEO, social media, and online marketing",
+    },
+    {
+      name: "Content Writing",
+      slug: "content-writing",
+      icon: "✍️",
+      description: "Blog posts, articles, and copywriting",
+    },
+    {
+      name: "Video Production",
+      slug: "video-production",
+      icon: "🎬",
+      description: "Video editing and production services",
+    },
+    {
+      name: "Photography",
+      slug: "photography",
+      icon: "📸",
+      description: "Professional photography services",
+    },
+    {
+      name: "Translation",
+      slug: "translation",
+      icon: "🌐",
+      description: "Document and content translation",
+    },
+    {
+      name: "Consulting",
+      slug: "consulting",
+      icon: "💼",
+      description: "Business and technical consulting",
+    },
+    {
+      name: "Legal Services",
+      slug: "legal-services",
+      icon: "⚖️",
+      description: "Legal advice and documentation",
+    },
   ];
 
   const categories: string[] = [];
@@ -199,7 +250,55 @@ async function main() {
     });
   }
 
-  // 5. CREATE REQUESTS
+  // 5. CREATE PENDING/REJECTED APPLICANTS (no profile — awaiting review)
+  console.log(
+    `➡️ Seeding ${NUM_PENDING_APPLICANTS} pending & rejected applicants...`,
+  );
+  const pendingStatuses = [
+    "pending",
+    "pending",
+    "pending",
+    "rejected",
+    "rejected",
+  ];
+  for (let i = 0; i < NUM_PENDING_APPLICANTS; i++) {
+    const status = pendingStatuses[i];
+    const user = await prisma.user.create({
+      data: {
+        email: `applicant${i}@example.com`,
+        role: "client",
+        email_verified: true,
+        auth: { create: { password_hash: PASSWORD_HASH } },
+        profile: {
+          create: {
+            full_name: faker.person.fullName(),
+            phone: faker.phone.number({ style: "international" }),
+            avatar_url: faker.image.avatar(),
+          },
+        },
+      },
+    });
+    await prisma.providerApplication.create({
+      data: {
+        user_id: user.id,
+        provider_type: "agency",
+        business_name: faker.company.name(),
+        description: faker.company.catchPhrase(),
+        portfolio_url: faker.internet.url(),
+        verification_docs: { license: faker.system.fileName() },
+        application_status: status as any,
+        ...(status === "rejected"
+          ? {
+              reviewed_by: admin.id,
+              reviewed_at: faker.date.recent(),
+              rejection_reason: "Did not meet criteria",
+            }
+          : {}),
+      },
+    });
+  }
+
+  // 6. CREATE REQUESTS
   console.log(`➡️ Seeding ${NUM_REQUESTS} Requests (various states)...`);
   const requests: { id: string; status: string; user_id: string }[] = [];
   const statusDist = [
@@ -237,7 +336,7 @@ async function main() {
     requests.push({ id: req.id, status: req.status, user_id: client_id });
   }
 
-  // 6. CREATE UNLOCKS & REVIEWS (Simulate active jobs)
+  // 7. CREATE UNLOCKS & REVIEWS (Simulate active jobs)
   console.log(`➡️ Seeding Lead Unlocks & Reviews...`);
   // Only completed/in_progress ones typically have unlocks
   const activeReqs = requests.filter(
@@ -315,7 +414,7 @@ async function main() {
     }
   }
 
-  // 7. CREATE ADMIN LOGS (Simulate admin actions)
+  // 8. CREATE ADMIN LOGS (Simulate admin actions)
   console.log(`➡️ Seeding Admin Logs...`);
   const adminActions = [
     "approve_provider",
@@ -328,7 +427,7 @@ async function main() {
   for (let i = 0; i < 20; i++) {
     const action = faker.helpers.arrayElement(adminActions);
     const provider_id = faker.helpers.arrayElement(providers);
-    
+
     await prisma.adminLog.create({
       data: {
         admin_id: admin.id,

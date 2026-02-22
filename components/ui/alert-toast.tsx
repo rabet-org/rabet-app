@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+  ReactNode,
+} from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +21,9 @@ import {
   WarningIcon,
   InfoIcon,
   XCircleIcon,
+  SpinnerGap,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 type AlertType = "success" | "error" | "warning" | "info" | "confirm";
 
@@ -27,6 +35,7 @@ interface AlertOptions {
   cancelText?: string;
   onConfirm?: () => void;
   onCancel?: () => void;
+  action?: () => Promise<void>;
 }
 
 interface AlertContextType {
@@ -37,6 +46,7 @@ const AlertContext = createContext<AlertContextType | undefined>(undefined);
 
 export function AlertProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [alertOptions, setAlertOptions] = useState<AlertOptions>({
     message: "",
     type: "info",
@@ -54,13 +64,27 @@ export function AlertProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const handleConfirm = () => {
-    alertOptions.onConfirm?.();
-    setIsOpen(false);
-    resolvePromise?.(true);
+  const handleConfirm = async () => {
+    if (alertOptions.action) {
+      setIsConfirming(true);
+      try {
+        await alertOptions.action();
+        setIsOpen(false);
+        resolvePromise?.(true);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsConfirming(false);
+      }
+    } else {
+      alertOptions.onConfirm?.();
+      setIsOpen(false);
+      resolvePromise?.(true);
+    }
   };
 
   const handleCancel = () => {
+    if (isConfirming) return;
     alertOptions.onCancel?.();
     setIsOpen(false);
     resolvePromise?.(false);
@@ -83,7 +107,7 @@ export function AlertProvider({ children }: { children: ReactNode }) {
 
   const getTitle = () => {
     if (alertOptions.title) return alertOptions.title;
-    
+
     switch (alertOptions.type) {
       case "success":
         return "Success";
@@ -119,10 +143,18 @@ export function AlertProvider({ children }: { children: ReactNode }) {
                   variant="outline"
                   onClick={handleCancel}
                   className="flex-1"
+                  disabled={isConfirming}
                 >
                   {alertOptions.cancelText || "Cancel"}
                 </Button>
-                <Button onClick={handleConfirm} className="flex-1">
+                <Button
+                  onClick={handleConfirm}
+                  className="flex-1"
+                  disabled={isConfirming}
+                >
+                  {isConfirming && (
+                    <SpinnerGap className="size-4 animate-spin mr-2" />
+                  )}
                   {alertOptions.confirmText || "Confirm"}
                 </Button>
               </>
@@ -151,25 +183,38 @@ export function useAlertHelpers() {
   const { showAlert } = useAlert();
 
   return {
-    success: (message: string, title?: string) =>
-      showAlert({ message, title, type: "success" }),
-    
-    error: (message: string, title?: string) =>
-      showAlert({ message, title, type: "error" }),
-    
-    warning: (message: string, title?: string) =>
-      showAlert({ message, title, type: "warning" }),
-    
-    info: (message: string, title?: string) =>
-      showAlert({ message, title, type: "info" }),
-    
-    confirm: (message: string, title?: string, confirmText?: string, cancelText?: string) =>
-      showAlert({ 
-        message, 
-        title, 
+    success: (message: string, title?: string) => {
+      // Use Sonner toast instead of custom modal
+      toast.success(title || "Success", { description: message });
+    },
+
+    error: (message: string, title?: string) => {
+      toast.error(title || "Error", { description: message });
+    },
+
+    warning: (message: string, title?: string) => {
+      toast.warning(title || "Warning", { description: message });
+    },
+
+    info: (message: string, title?: string) => {
+      toast.info(title || "Info", { description: message });
+    },
+
+    // Maintain custom modal for confirms since they require interactive promises
+    confirm: (
+      message: string,
+      title?: string,
+      confirmText?: string,
+      cancelText?: string,
+      action?: () => Promise<void>,
+    ) =>
+      showAlert({
+        message,
+        title,
         type: "confirm",
         confirmText,
         cancelText,
+        action,
       }),
   };
 }

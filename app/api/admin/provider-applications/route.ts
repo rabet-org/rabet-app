@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       ...(providerType && { provider_type: providerType }),
     };
 
-    const [applications, total] = await Promise.all([
+    const [applications, total, categories] = await Promise.all([
       db.providerApplication.findMany({
         where,
         include: {
@@ -55,6 +55,18 @@ export async function GET(req: NextRequest) {
                 select: {
                   full_name: true,
                   phone: true,
+                  avatar_url: true,
+                },
+              },
+            },
+          },
+          provider_profile: {
+            include: {
+              services: {
+                include: {
+                  category: {
+                    select: { id: true, name: true, icon: true },
+                  },
                 },
               },
             },
@@ -65,26 +77,61 @@ export async function GET(req: NextRequest) {
         take: limit,
       }),
       db.providerApplication.count({ where }),
+      db.category.findMany({ select: { id: true, name: true, icon: true } }),
     ]);
 
+    // Create a fast lookup map for categories
+    const categoryMap = new Map(
+      categories.map((c) => [c.id, { name: c.name, icon: c.icon }]),
+    );
+
     return ok({
-      data: applications.map((app) => ({
-        id: app.id,
-        provider_type: app.provider_type,
-        business_name: app.business_name,
-        description: app.description,
-        portfolio_url: app.portfolio_url,
-        application_status: app.application_status,
-        rejection_reason: app.rejection_reason,
-        reviewed_at: app.reviewed_at,
-        created_at: app.created_at,
-        applicant: {
-          id: app.user_id,
-          email: app.user.email,
-          full_name: app.user.profile?.full_name,
-          phone: app.user.profile?.phone,
-        },
-      })),
+      data: applications.map((app) => {
+        // Extract services array from verification_docs
+        let requestedServices: {
+          id: string;
+          name: string;
+          icon: string | null;
+        }[] = [];
+
+        // 1. Try to get real services from the established provider profile
+        if (app.provider_profile?.services?.length) {
+          requestedServices = app.provider_profile.services.map((ps: any) => ({
+            id: ps.category.id,
+            name: ps.category.name,
+            icon: ps.category.icon,
+          }));
+        } else {
+          // 2. Fallback to verification docs (for pending applications)
+          const docs = app.verification_docs as Record<string, any>;
+          if (docs && Array.isArray(docs.services)) {
+            requestedServices = docs.services.map((id: string) => ({
+              id,
+              name: categoryMap.get(id)?.name || "Unknown Service",
+              icon: categoryMap.get(id)?.icon || null,
+            }));
+          }
+        }
+
+        return {
+          id: app.id,
+          provider_type: app.provider_type,
+          business_name: app.business_name,
+          description: app.description,
+          portfolio_url: app.portfolio_url,
+          application_status: app.application_status,
+          rejection_reason: app.rejection_reason,
+          reviewed_at: app.reviewed_at,
+          created_at: app.created_at,
+          applicant: {
+            id: app.user_id,
+            email: app.user.email,
+            full_name: app.user.profile?.full_name,
+            phone: app.user.profile?.phone,
+          },
+          services: requestedServices,
+        };
+      }),
       pagination: {
         page,
         limit,

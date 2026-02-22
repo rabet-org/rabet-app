@@ -22,10 +22,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ShieldWarningIcon,
   ShieldCheckIcon,
   MagnifyingGlassIcon,
+  BellIcon,
+  PaperPlaneTiltIcon,
+  MegaphoneIcon,
 } from "@phosphor-icons/react";
 import {
   Dialog,
@@ -47,6 +51,7 @@ type User = {
   profile: {
     full_name: string;
     phone: string | null;
+    avatar_url: string | null;
   } | null;
   _count: { requests: number };
   provider_profile: {
@@ -59,55 +64,91 @@ type User = {
 
 export default function AdminUsersClient({
   initialData,
+  initialTotal,
+  initialTotalPages,
+  initialSearch = "",
 }: {
   initialData: User[];
+  initialTotal: number;
+  initialTotalPages: number;
+  initialSearch?: string;
 }) {
   const [users, setUsers] = useState<User[]>(initialData);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [banReason, setBanReason] = useState("");
+  const [isConfirmingBan, setIsConfirmingBan] = useState(false);
   const isFirstMount = useRef(true);
 
+  // Notify state
+  const [isNotifying, setIsNotifying] = useState(false);
+  const [notifyTitle, setNotifyTitle] = useState("");
+  const [notifyMessage, setNotifyMessage] = useState("");
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
+
+  // Broadcast state
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastRole, setBroadcastRole] = useState("all");
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(initialTotal);
+  const [totalPages, setTotalPages] = useState(initialTotalPages);
+
   // Filters State
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all"); // "all", "active", "pending", "banned"
 
   const { success, error, confirm } = useAlertHelpers();
 
-  const fetchUsers = useCallback(async () => {
-    setIsFetching(true);
-    try {
-      const params = new URLSearchParams();
-      if (searchQuery) params.set("search", searchQuery);
-      if (roleFilter !== "all") params.set("role", roleFilter);
+  const fetchUsers = useCallback(
+    async (pageNum: number = 1) => {
+      setIsFetching(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(pageNum));
+        params.set("limit", "50");
+        if (searchQuery) params.set("search", searchQuery);
+        if (roleFilter !== "all") params.set("role", roleFilter);
 
-      // We handle the "is_blocked" directly in the backend but "active" vs "pending" is custom
-      if (statusFilter === "banned") params.set("is_blocked", "true");
-      else if (statusFilter === "active" || statusFilter === "pending")
-        params.set("is_blocked", "false");
+        // We handle the "is_blocked" directly in the backend but "active" vs "pending" is custom
+        if (statusFilter === "banned") params.set("is_blocked", "true");
+        else if (statusFilter === "active" || statusFilter === "pending")
+          params.set("is_blocked", "false");
 
-      const res = await fetch(`/api/admin/users?${params.toString()}`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const json = await res.json();
-        let fetchedUsers: User[] = json.data || [];
+        const res = await fetch(`/api/admin/users?${params.toString()}`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const json = await res.json();
+          let fetchedUsers: User[] = json.data || [];
 
-        // Manual client-side filtering for is_active / pending since the backend doesn't explicitly filter by it via param yet
-        if (statusFilter === "pending")
-          fetchedUsers = fetchedUsers.filter((u) => !u.is_active);
-        if (statusFilter === "active")
-          fetchedUsers = fetchedUsers.filter((u) => u.is_active);
+          // Manual client-side filtering for is_active / pending since the backend doesn't explicitly filter by it via param yet
+          if (statusFilter === "pending")
+            fetchedUsers = fetchedUsers.filter((u) => !u.is_active);
+          if (statusFilter === "active")
+            fetchedUsers = fetchedUsers.filter((u) => u.is_active);
 
-        setUsers(fetchedUsers);
+          setUsers(fetchedUsers);
+          setPage(pageNum);
+          if (json.pagination) {
+            setTotalUsers(json.pagination.total);
+            setTotalPages(json.pagination.total_pages);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsFetching(false);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsFetching(false);
-    }
-  }, [searchQuery, roleFilter, statusFilter]);
+    },
+    [searchQuery, roleFilter, statusFilter],
+  );
 
   const mountedParams = useRef({ search: "", role: "all", status: "all" });
 
@@ -128,47 +169,72 @@ export default function AdminUsersClient({
     }
 
     mountedParams.current = currentParams;
+    setPage(1);
 
     const timer = setTimeout(() => {
-      fetchUsers();
+      fetchUsers(1);
     }, 400); // 400ms debounce
     return () => clearTimeout(timer);
   }, [searchQuery, roleFilter, statusFilter, fetchUsers]);
 
-  const toggleBan = async (id: string, currentlyBlocked: boolean) => {
-    const confirmed = await confirm(
-      `Are you sure you want to ${currentlyBlocked ? "unban" : "ban"} this user?`,
-      currentlyBlocked ? "Unban User" : "Ban User"
-    );
-    if (!confirmed) return;
-
+  const handleBan = async (id: string, reason: string) => {
     setIsUpdating(true);
     try {
-      const action = currentlyBlocked ? "unblock" : "block";
       const res = await fetch(`/api/admin/users/${id}/block`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          reason:
-            action === "block" ? "Violation of platform terms." : undefined,
-        }),
+        body: JSON.stringify({ reason }),
       });
-
       if (res.ok) {
         setSelectedUser(null);
+        setIsConfirmingBan(false);
+        setBanReason("");
         await fetchUsers();
-        await success(`User ${currentlyBlocked ? "unbanned" : "banned"} successfully`);
+        success("User banned successfully");
       } else {
         const data = await res.json();
-        await error(data.message || "Action failed");
+        error(data.error?.message || data.message || "Failed to ban user");
       }
     } catch (e) {
-      await error("Network error occurred.");
+      console.error(e);
+      error("An unexpected error occurred");
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleUnban = async (id: string) => {
+    await confirm(
+      "Are you sure you want to lift the ban on this user?",
+      "Unban User",
+      undefined,
+      undefined,
+      async () => {
+        setIsUpdating(true);
+        try {
+          const res = await fetch(`/api/admin/users/${id}/block`, {
+            method: "DELETE",
+            credentials: "include",
+          });
+          if (res.ok) {
+            setSelectedUser(null);
+            await fetchUsers();
+            success("User unbanned successfully");
+          } else {
+            const data = await res.json();
+            error(
+              data.error?.message || data.message || "Failed to unban user",
+            );
+          }
+        } catch (e) {
+          console.error(e);
+          error("An unexpected error occurred");
+        } finally {
+          setIsUpdating(false);
+        }
+      },
+    );
   };
 
   const getRoleBadge = (role: string) => {
@@ -215,6 +281,17 @@ export default function AdminUsersClient({
             <p className="text-muted-foreground text-sm mt-1">
               Manage all platform users, their roles, and access status.
             </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Showing{" "}
+              <span className="font-medium text-foreground">
+                {users.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {totalUsers.toLocaleString()}
+              </span>{" "}
+              users
+            </p>
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
@@ -249,6 +326,15 @@ export default function AdminUsersClient({
                 <SelectItem value="banned">Banned</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setIsBroadcasting(true)}
+            >
+              <MegaphoneIcon className="mr-1.5 size-4" />
+              Broadcast
+            </Button>
           </div>
         </div>
 
@@ -314,9 +400,19 @@ export default function AdminUsersClient({
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
-                            {user.profile?.full_name?.charAt(0).toUpperCase() ||
-                              user.email.charAt(0).toUpperCase()}
+                          <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm overflow-hidden border border-border/50">
+                            {user.profile?.avatar_url ? (
+                              <img
+                                src={user.profile.avatar_url}
+                                alt="User Avatar"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              user.profile?.full_name
+                                ?.charAt(0)
+                                .toUpperCase() ||
+                              user.email.charAt(0).toUpperCase()
+                            )}
                           </div>
                           <div>
                             <div className="font-medium text-foreground group-hover:text-primary transition-colors">
@@ -384,8 +480,12 @@ export default function AdminUsersClient({
                                 : "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
                             }
                             onClick={(e) => {
-                              e.stopPropagation(); // Prevent opening the dialog
-                              toggleBan(user.id, user.is_blocked);
+                              e.stopPropagation();
+                              if (user.is_blocked) {
+                                handleUnban(user.id);
+                              } else {
+                                setSelectedUser(user);
+                              }
                             }}
                           >
                             {user.is_blocked ? (
@@ -410,10 +510,46 @@ export default function AdminUsersClient({
           </div>
         </div>
 
-        {/* Detailed User Dialog */}
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-1">
+            <p className="text-sm text-muted-foreground">
+              Page <span className="font-medium text-foreground">{page}</span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">{totalPages}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || isFetching}
+                onClick={() => fetchUsers(page - 1)}
+              >
+                ← Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages || isFetching}
+                onClick={() => fetchUsers(page + 1)}
+              >
+                Next →
+              </Button>
+            </div>
+          </div>
+        )}
         <Dialog
           open={!!selectedUser}
-          onOpenChange={(open) => !open && setSelectedUser(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedUser(null);
+              setIsConfirmingBan(false);
+              setBanReason("");
+              setIsNotifying(false);
+              setNotifyTitle("");
+              setNotifyMessage("");
+            }
+          }}
         >
           <DialogContent className="max-w-lg overflow-y-auto max-h-[90dvh]">
             <DialogHeader>
@@ -427,9 +563,19 @@ export default function AdminUsersClient({
               <div className="space-y-5 pb-2">
                 {/* Avatar + Identity */}
                 <div className="flex items-center gap-4 p-4 rounded-xl border bg-muted/40">
-                  <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl shrink-0">
-                    {selectedUser.profile?.full_name?.charAt(0).toUpperCase() ||
-                      selectedUser.email.charAt(0).toUpperCase()}
+                  <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-2xl shrink-0 overflow-hidden border border-border/50">
+                    {selectedUser.profile?.avatar_url ? (
+                      <img
+                        src={selectedUser.profile.avatar_url}
+                        alt="User Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      selectedUser.profile?.full_name
+                        ?.charAt(0)
+                        .toUpperCase() ||
+                      selectedUser.email.charAt(0).toUpperCase()
+                    )}
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-semibold text-lg leading-tight truncate">
@@ -625,33 +771,284 @@ export default function AdminUsersClient({
 
                 {/* Actions */}
                 {selectedUser.role !== "admin" && (
-                  <div className="flex gap-3 pt-1">
-                    <Button
-                      variant={
-                        selectedUser.is_blocked ? "outline" : "destructive"
-                      }
-                      className={`w-full ${selectedUser.is_blocked ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10" : ""}`}
-                      disabled={isUpdating}
-                      onClick={() =>
-                        toggleBan(selectedUser.id, selectedUser.is_blocked)
-                      }
-                    >
-                      {selectedUser.is_blocked ? (
-                        <>
-                          <ShieldCheckIcon className="mr-2 size-4" /> Lift
-                          Account Ban
-                        </>
-                      ) : (
-                        <>
-                          <ShieldWarningIcon className="mr-2 size-4" /> Ban this
-                          Account
-                        </>
-                      )}
-                    </Button>
+                  <div className="pt-1 space-y-3">
+                    {/* Notify User */}
+                    {!isNotifying ? (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setIsNotifying(true)}
+                      >
+                        <BellIcon className="mr-2 size-4" />
+                        Notify User
+                      </Button>
+                    ) : (
+                      <div className="space-y-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                          Send Notification
+                        </p>
+                        <Input
+                          placeholder="Title"
+                          value={notifyTitle}
+                          onChange={(e) => setNotifyTitle(e.target.value)}
+                        />
+                        <Textarea
+                          placeholder="Message..."
+                          rows={2}
+                          value={notifyMessage}
+                          onChange={(e) => setNotifyMessage(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => {
+                              setIsNotifying(false);
+                              setNotifyTitle("");
+                              setNotifyMessage("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={
+                              isSendingNotification ||
+                              !notifyTitle.trim() ||
+                              !notifyMessage.trim()
+                            }
+                            onClick={async () => {
+                              setIsSendingNotification(true);
+                              try {
+                                const res = await fetch(
+                                  "/api/admin/notifications",
+                                  {
+                                    method: "POST",
+                                    credentials: "include",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      user_id: selectedUser.id,
+                                      title: notifyTitle,
+                                      message: notifyMessage,
+                                    }),
+                                  },
+                                );
+                                if (res.ok) {
+                                  await success(
+                                    "Notification sent successfully",
+                                  );
+                                  setIsNotifying(false);
+                                  setNotifyTitle("");
+                                  setNotifyMessage("");
+                                } else {
+                                  const e = await res.json();
+                                  error(e.message || "Failed to send");
+                                }
+                              } catch {
+                                error("Network error");
+                              } finally {
+                                setIsSendingNotification(false);
+                              }
+                            }}
+                          >
+                            <PaperPlaneTiltIcon className="mr-2 size-4" />
+                            {isSendingNotification ? "Sending..." : "Send"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {selectedUser.is_blocked ? (
+                      <Button
+                        variant="outline"
+                        className="w-full border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                        disabled={isUpdating}
+                        onClick={() => handleUnban(selectedUser.id)}
+                      >
+                        <ShieldCheckIcon className="mr-2 size-4" />
+                        Lift Account Ban
+                      </Button>
+                    ) : !isConfirmingBan ? (
+                      <Button
+                        variant="destructive"
+                        className="w-full"
+                        onClick={() => setIsConfirmingBan(true)}
+                      >
+                        <ShieldWarningIcon className="mr-2 size-4" />
+                        Ban this Account
+                      </Button>
+                    ) : (
+                      <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                        <p className="text-sm font-semibold text-destructive">
+                          Reason for ban
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            "Spam / fake account",
+                            "Abusive behavior",
+                            "Payment fraud",
+                            "Violation of platform terms",
+                            "Suspicious activity",
+                          ].map((reason) => (
+                            <button
+                              key={reason}
+                              type="button"
+                              onClick={() => setBanReason(reason)}
+                              className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                                banReason === reason
+                                  ? "bg-destructive text-destructive-foreground border-destructive"
+                                  : "bg-muted/50 text-muted-foreground border-border hover:border-destructive/50 hover:text-foreground"
+                              }`}
+                            >
+                              {reason}
+                            </button>
+                          ))}
+                        </div>
+                        <Textarea
+                          placeholder="Or type a custom reason..."
+                          rows={2}
+                          value={banReason}
+                          onChange={(e) => setBanReason(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => {
+                              setIsConfirmingBan(false);
+                              setBanReason("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            disabled={isUpdating || !banReason.trim()}
+                            onClick={() =>
+                              handleBan(selectedUser.id, banReason)
+                            }
+                          >
+                            <ShieldWarningIcon className="mr-2 size-4" />
+                            {isUpdating ? "Banning..." : "Confirm Ban"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Broadcast Notification Dialog */}
+        <Dialog
+          open={isBroadcasting}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsBroadcasting(false);
+              setBroadcastTitle("");
+              setBroadcastMessage("");
+              setBroadcastRole("all");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MegaphoneIcon className="size-5 text-primary" />
+                Broadcast Notification
+              </DialogTitle>
+              <DialogDescription>
+                Send a notification to a specific group of users.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Audience</label>
+                <Select value={broadcastRole} onValueChange={setBroadcastRole}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Users</SelectItem>
+                    <SelectItem value="client">Clients only</SelectItem>
+                    <SelectItem value="provider">Providers only</SelectItem>
+                    <SelectItem value="admin">Admins only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Title</label>
+                <Input
+                  placeholder="e.g. Scheduled maintenance on Mar 1"
+                  value={broadcastTitle}
+                  onChange={(e) => setBroadcastTitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Message</label>
+                <Textarea
+                  placeholder="Body of the notification..."
+                  rows={3}
+                  value={broadcastMessage}
+                  onChange={(e) => setBroadcastMessage(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsBroadcasting(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  isSendingBroadcast ||
+                  !broadcastTitle.trim() ||
+                  !broadcastMessage.trim()
+                }
+                onClick={async () => {
+                  setIsSendingBroadcast(true);
+                  try {
+                    const body: Record<string, unknown> = {
+                      title: broadcastTitle,
+                      message: broadcastMessage,
+                    };
+                    if (broadcastRole === "all") body.broadcast = true;
+                    else body.role = broadcastRole;
+
+                    const res = await fetch("/api/admin/notifications", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(body),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      await success(`Sent to ${data.sent ?? "?"} user(s)`);
+                      setIsBroadcasting(false);
+                      setBroadcastTitle("");
+                      setBroadcastMessage("");
+                      setBroadcastRole("all");
+                    } else {
+                      const e = await res.json();
+                      error(e.message || "Failed to broadcast");
+                    }
+                  } catch {
+                    error("Network error");
+                  } finally {
+                    setIsSendingBroadcast(false);
+                  }
+                }}
+              >
+                <PaperPlaneTiltIcon className="mr-2 size-4" />
+                {isSendingBroadcast ? "Sending..." : "Send Broadcast"}
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       </main>

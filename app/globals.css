@@ -123,4 +123,23 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Custom Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 4px; /* Prevents scrollbar from clipping rounded corners */
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border/80 rounded-full border border-solid border-transparent bg-clip-padding;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/80 border-2 border-solid border-transparent bg-clip-padding;
+  }
 }

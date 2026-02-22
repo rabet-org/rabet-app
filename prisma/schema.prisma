@@ -95,6 +95,7 @@ enum NotificationType {
   new_review_received
   request_status_changed
   refund_processed
+  admin_message
 }
 
 enum AdminActionType {
@@ -108,6 +109,8 @@ enum AdminActionType {
   block_user
   unblock_user
   adjust_wallet
+  create_admin
+  remove_admin
 }
 
 // ─────────────────────────────────────────────────────────

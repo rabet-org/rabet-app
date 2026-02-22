@@ -1,26 +1,56 @@
 import { Topbar } from "@/components/layout/topbar";
-import { cookies } from "next/headers";
+import { db } from "@/lib/db";
 import { ProvidersClient } from "./providers-client";
 
 async function getProviders() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("access_token")?.value;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
-
-  const res = await fetch(`${baseUrl}/admin/providers?limit=100`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-
-  if (!res.ok) throw new Error("Failed to fetch providers");
-  const data = await res.json();
-  return data.data || [];
+  const [providers, total] = await Promise.all([
+    db.providerProfile.findMany({
+      include: {
+        user: {
+          select: {
+            email: true,
+            profile: {
+              select: { full_name: true, phone: true, avatar_url: true },
+            },
+          },
+        },
+        application: { select: { provider_type: true, business_name: true } },
+        services: {
+          include: {
+            category: { select: { id: true, name: true, icon: true } },
+          },
+        },
+        wallet: { select: { balance: true, currency: true } },
+        _count: { select: { reviews: true, unlocks: true } },
+      },
+      orderBy: { created_at: "desc" },
+      take: 100,
+    }),
+    db.providerProfile.count(),
+  ]);
+  return {
+    providers: providers.map((p) => ({
+      ...p,
+      created_at: p.created_at.toISOString(),
+      updated_at: p.updated_at.toISOString(),
+      verified_at: p.verified_at?.toISOString() ?? null,
+      wallet: p.wallet
+        ? { ...p.wallet, balance: p.wallet.balance.toNumber() }
+        : null,
+    })),
+    total,
+  };
 }
 
-export default async function AdminProvidersPage() {
-  let providers;
+export default async function AdminProvidersPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ search?: string }>;
+}) {
+  const search = (await searchParams)?.search ?? "";
+  let result: { providers: any[]; total: number };
   try {
-    providers = await getProviders();
+    result = await getProviders();
   } catch {
     return (
       <div className="flex flex-col h-full">
@@ -34,5 +64,11 @@ export default async function AdminProvidersPage() {
     );
   }
 
-  return <ProvidersClient initialProviders={providers} />;
+  return (
+    <ProvidersClient
+      initialProviders={result.providers}
+      initialTotal={result.total}
+      initialSearch={search}
+    />
+  );
 }

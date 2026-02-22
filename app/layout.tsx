@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Figtree } from "next/font/google";
 import "./globals.css";
 import { AlertProvider } from "@/components/ui/alert-toast";
+import { Toaster } from "@/components/ui/sonner";
 
-const figtree = Figtree({subsets:['latin'], variable:'--font-sans'});
+const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
       >
         <AlertProvider>
           {children}
+          <Toaster />
         </AlertProvider>
       </body>
     </html>

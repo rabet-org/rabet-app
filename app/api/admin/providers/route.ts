@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
     const limit = Math.min(
       100,
-      Math.max(1, parseInt(searchParams.get("limit") ?? "20"))
+      Math.max(1, parseInt(searchParams.get("limit") ?? "20")),
     );
     const skip = (page - 1) * limit;
 
@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
               profile: {
                 select: {
                   full_name: true,
+                  phone: true,
+                  avatar_url: true,
                 },
               },
             },
@@ -40,6 +42,13 @@ export async function GET(req: NextRequest) {
             select: {
               provider_type: true,
               business_name: true,
+            },
+          },
+          services: {
+            include: {
+              category: {
+                select: { id: true, name: true, icon: true },
+              },
             },
           },
           wallet: {

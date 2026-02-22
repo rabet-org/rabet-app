@@ -1,20 +1,19 @@
 import { Topbar } from "@/components/layout/topbar";
-import { cookies } from "next/headers";
+import { db } from "@/lib/db";
 import { CategoriesClient } from "./categories-client";
 
 async function getCategories() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("access_token")?.value;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
-
-  const res = await fetch(`${baseUrl}/admin/categories?limit=100`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
+  return db.category.findMany({
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      description: true,
+      icon: true,
+      is_active: true,
+    },
+    orderBy: { name: "asc" },
   });
-
-  if (!res.ok) throw new Error("Failed to fetch categories");
-  const json = await res.json();
-  return json.data || [];
 }
 
 export default async function AdminCategoriesPage() {

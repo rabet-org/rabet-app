@@ -31,7 +31,7 @@ export async function uploadToCloudinary(
         resource_type: resourceType,
         allowed_formats:
           resourceType === "image"
-            ? ["jpg", "jpeg", "png", "webp"]
+            ? ["jpg", "jpeg", "png", "webp", "svg"]
             : ["pdf", "doc", "docx"],
       },
       (error, result) => {

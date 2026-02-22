@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Topbar } from "@/components/layout/topbar";
 import { format } from "date-fns";
 import {
@@ -12,6 +13,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +38,10 @@ import {
   StarIcon,
   CurrencyDollarIcon,
   LockKeyIcon,
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  CalendarIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 
 type AdminLog = {
@@ -136,25 +149,185 @@ function getActionMeta(type: string) {
   );
 }
 
+const TARGET_ROUTES: Record<string, string> = {
+  user: "/admin/users",
+  provider: "/admin/providers",
+  review: "/admin/reviews",
+  request: "/admin/requests",
+};
+
 export default function AdminFinanceClient({
   initialData,
+  initialTotal,
 }: {
   initialData: AdminLog[];
+  initialTotal: number;
 }) {
   const [logs] = useState<AdminLog[]>(initialData);
   const [selectedLog, setSelectedLog] = useState<AdminLog | null>(null);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [actionFilter, setActionFilter] = useState("all");
+  const [adminFilter, setAdminFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const uniqueAdmins = Array.from(
+    new Map(logs.map((l) => [l.admin.id, l.admin])).values(),
+  );
+
+  const filteredLogs = logs.filter((log) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !q ||
+      log.admin.email.toLowerCase().includes(q) ||
+      log.admin.full_name.toLowerCase().includes(q) ||
+      log.target_id.toLowerCase().includes(q) ||
+      log.target_type.toLowerCase().includes(q);
+
+    const matchesAction =
+      actionFilter === "all" || log.action_type === actionFilter;
+
+    const matchesAdmin = adminFilter === "all" || log.admin.id === adminFilter;
+
+    const logDate = new Date(log.created_at);
+    const matchesFrom = !dateFrom || logDate >= new Date(dateFrom);
+    const matchesTo =
+      !dateTo ||
+      logDate <= new Date(new Date(dateTo).getTime() + 86_400_000 - 1);
+
+    return (
+      matchesSearch && matchesAction && matchesAdmin && matchesFrom && matchesTo
+    );
+  });
+
+  const hasActiveFilters =
+    searchQuery ||
+    actionFilter !== "all" ||
+    adminFilter !== "all" ||
+    dateFrom ||
+    dateTo;
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setActionFilter("all");
+    setAdminFilter("all");
+    setDateFrom("");
+    setDateTo("");
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background">
       <Topbar title="Audit Logs" />
       <main className="flex-1 p-6 w-full max-w-7xl mx-auto space-y-6 pb-16">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">
-            System Audit Logs
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            Immutable ledger of all administrative actions on the platform.
-          </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+              System Audit Logs
+              <Badge variant="outline" className="font-mono text-[10px]">
+                {filteredLogs.length} / {initialTotal.toLocaleString()}
+              </Badge>
+            </h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              Immutable ledger of all administrative actions on the platform.
+            </p>
+          </div>
+        </div>
+
+        {/* Cap warning */}
+        {logs.length >= 50 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+            <span className="font-semibold">⚠</span>
+            Results are limited to 50 records. Use search and filters to narrow
+            down.
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row gap-3">
+            {/* Search */}
+            <div className="relative flex-1 max-w-sm">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+              <Input
+                placeholder="Search by admin, entity type or ID..."
+                className="pl-9 bg-card shadow-sm border-border/50"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Action type filter */}
+            <Select value={actionFilter} onValueChange={setActionFilter}>
+              <SelectTrigger className="w-[200px] bg-card shadow-sm border-border/50 shrink-0">
+                <div className="flex items-center gap-2">
+                  <FunnelIcon className="size-4 text-muted-foreground" />
+                  <SelectValue placeholder="Action type" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Actions</SelectItem>
+                {Object.entries(ACTION_META).map(([key, meta]) => (
+                  <SelectItem key={key} value={key}>
+                    {meta.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Admin filter */}
+            <Select value={adminFilter} onValueChange={setAdminFilter}>
+              <SelectTrigger className="w-[190px] bg-card shadow-sm border-border/50 shrink-0">
+                <div className="flex items-center gap-2">
+                  <UserCircleIcon className="size-4 text-muted-foreground" />
+                  <SelectValue placeholder="Performed by" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Admins</SelectItem>
+                {uniqueAdmins.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date range */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="size-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground shrink-0">
+                From
+              </span>
+              <Input
+                type="date"
+                className="w-[160px] bg-card shadow-sm border-border/50 text-sm"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground shrink-0">To</span>
+              <Input
+                type="date"
+                className="w-[160px] bg-card shadow-sm border-border/50 text-sm"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-md border border-border/50 bg-card shadow-sm"
+              >
+                <XIcon className="size-3" />
+                Clear filters
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -179,8 +352,20 @@ export default function AdminFinanceClient({
                       No audit logs found.
                     </TableCell>
                   </TableRow>
+                ) : filteredLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="h-32 text-center text-muted-foreground"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <MagnifyingGlassIcon className="size-8 text-muted-foreground/40" />
+                        <p>No logs match your filters.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  logs.map((log) => {
+                  filteredLogs.map((log) => {
                     const meta = getActionMeta(log.action_type);
                     const Icon = meta.Icon;
                     return (
@@ -226,8 +411,20 @@ export default function AdminFinanceClient({
                             {log.target_type}
                           </span>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {log.target_id.slice(0, 8)}…
+                        <TableCell className="font-mono text-xs">
+                          {TARGET_ROUTES[log.target_type] ? (
+                            <Link
+                              href={`${TARGET_ROUTES[log.target_type]}?search=${log.target_id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-primary hover:underline underline-offset-2"
+                            >
+                              {log.target_id.slice(0, 8)}…
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {log.target_id.slice(0, 8)}…
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -324,9 +521,18 @@ export default function AdminFinanceClient({
                           <span className="text-muted-foreground text-xs block mb-0.5">
                             Full Target ID
                           </span>
-                          <code className="text-[10px] bg-muted px-2 py-1 rounded block font-mono break-all">
-                            {selectedLog.target_id}
-                          </code>
+                          {TARGET_ROUTES[selectedLog.target_type] ? (
+                            <Link
+                              href={`${TARGET_ROUTES[selectedLog.target_type]}?search=${selectedLog.target_id}`}
+                              className="text-[10px] bg-muted px-2 py-1 rounded flex font-mono break-all text-primary hover:underline underline-offset-2"
+                            >
+                              {selectedLog.target_id}
+                            </Link>
+                          ) : (
+                            <code className="text-[10px] bg-muted px-2 py-1 rounded block font-mono break-all">
+                              {selectedLog.target_id}
+                            </code>
+                          )}
                         </div>
                       </div>
                     </div>

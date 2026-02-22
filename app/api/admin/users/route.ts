@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
 
     if (searchParam) {
       where.OR = [
+        { id: { contains: searchParam, mode: "insensitive" } },
         { email: { contains: searchParam, mode: "insensitive" } },
         {
           profile: {
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
             select: {
               full_name: true,
               phone: true,
+              avatar_url: true,
             },
           },
           _count: {

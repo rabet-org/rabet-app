@@ -1,29 +1,77 @@
-import { cookies } from "next/headers";
+import { db } from "@/lib/db";
 import AdminUsersClient from "./client-page";
 
 async function getUsers() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("access_token")?.value;
-  const baseUrl =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api";
-
-  const res = await fetch(`${baseUrl}/admin/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch users");
-  }
-
-  const json = await res.json();
-  return json.data || [];
+  const limit = 50;
+  const [users, total] = await Promise.all([
+    db.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        is_blocked: true,
+        is_active: true,
+        email_verified: true,
+        email_verified_at: true,
+        created_at: true,
+        profile: { select: { full_name: true, phone: true, avatar_url: true } },
+        _count: { select: { requests: true } },
+        provider_profile: {
+          select: {
+            is_verified: true,
+            wallet: { select: { balance: true, currency: true } },
+            subscription: { select: { plan_type: true, status: true } },
+            _count: { select: { reviews: true } },
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+      take: limit,
+    }),
+    db.user.count(),
+  ]);
+  return {
+    data: users.map((u) => ({
+      ...u,
+      created_at: u.created_at.toISOString(),
+      email_verified_at: u.email_verified_at?.toISOString() ?? null,
+      provider_profile: u.provider_profile
+        ? {
+            ...u.provider_profile,
+            wallet: u.provider_profile.wallet
+              ? {
+                  ...u.provider_profile.wallet,
+                  balance: u.provider_profile.wallet.balance.toNumber(),
+                }
+              : null,
+          }
+        : null,
+    })),
+    pagination: {
+      page: 1,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit),
+    },
+  };
 }
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ search?: string }>;
+}) {
+  const search = (await searchParams)?.search ?? "";
   try {
-    const users = await getUsers();
-    return <AdminUsersClient initialData={users} />;
+    const { data, pagination } = await getUsers();
+    return (
+      <AdminUsersClient
+        initialData={data}
+        initialTotal={pagination.total}
+        initialTotalPages={pagination.total_pages}
+        initialSearch={search}
+      />
+    );
   } catch (error) {
     return (
       <div className="p-8 text-center text-red-500">

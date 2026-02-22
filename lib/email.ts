@@ -28,6 +28,36 @@ export async function sendVerificationEmail(
   });
 }
 
+// ─── Admin Welcome ───────────────────────────────────────
+
+export async function sendAdminWelcomeEmail(
+  to: string,
+  fullName: string,
+  tempPassword: string,
+): Promise<void> {
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: "You've been added as a Rabet Administrator",
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto">
+        <h2 style="color:#7c3aed">Welcome to the Rabet Admin Team</h2>
+        <p>Hi <strong>${fullName}</strong>,</p>
+        <p>You have been granted administrator access to the Rabet platform by a fellow admin.</p>
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:16px;margin:16px 0">
+          <p style="margin:0 0 8px"><strong>Email:</strong> ${to}</p>
+          <p style="margin:0"><strong>Temporary Password:</strong> <code style="background:#ede9fe;padding:2px 6px;border-radius:4px;font-size:14px">${tempPassword}</code></p>
+        </div>
+        <p style="color:#dc2626;font-size:13px">⚠️ Please log in and change your password immediately.</p>
+        <a href="${APP_URL}/login" style="display:inline-block;padding:12px 24px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:6px;margin:8px 0">
+          Go to Admin Dashboard
+        </a>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">If you were not expecting this email, please ignore it or contact support.</p>
+      </div>
+    `,
+  });
+}
+
 // ─── Password Reset ──────────────────────────────────────
 
 export async function sendPasswordResetEmail(
