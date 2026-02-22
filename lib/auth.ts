@@ -9,13 +9,25 @@ import { ApiError } from "@/lib/api-response";
 export async function authenticate(
   req: NextRequest,
 ): Promise<JwtPayload | Response> {
+  let token = "";
+
+  // 1. Check Authorization header
   const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.slice(7);
+  }
+
+  // 2. Fallback to HttpOnly cookie (for Client Component fetches)
+  if (!token) {
+    token = req.cookies.get("access_token")?.value || "";
+  }
+
+  if (!token) {
     return ApiError.unauthorized();
   }
 
   try {
-    return verifyAccessToken(authHeader.slice(7));
+    return verifyAccessToken(token);
   } catch {
     return ApiError.unauthorized("Invalid or expired access token");
   }

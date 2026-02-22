@@ -1,6 +1,6 @@
-import { Topbar } from "@/components/layout/topbar"
+import { Topbar } from "@/components/layout/topbar";
 
-export default function AgencyWalletPage() {
+export default function ProviderWalletPage() {
   return (
     <div className="flex flex-col h-full">
       <Topbar title="My Wallet" />
@@ -10,5 +10,5 @@ export default function AgencyWalletPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

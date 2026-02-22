@@ -1,14 +1,14 @@
-import { Topbar } from "@/components/layout/topbar"
+import { Topbar } from "@/components/layout/topbar";
 
-export default function AgencyLeadsPage() {
+export default function ProviderProfilePage() {
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="My Leads" />
+      <Topbar title="Provider Profile" />
       <main className="flex-1 p-6">
         <div className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
-          Unlocked Leads List Placeholder
+          Profile Settings Placeholder
         </div>
       </main>
     </div>
-  )
+  );
 }
