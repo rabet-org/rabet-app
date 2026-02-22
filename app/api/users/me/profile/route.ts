@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { authenticate, isAuthenticated } from "@/lib/auth";
 import { ok, ApiError } from "@/lib/api-response";
-import { verifyPassword, hashPassword } from "@/lib/password";
+import { comparePassword, hashPassword } from "@/lib/password";
 
 /**
  * PATCH /api/users/me/profile
@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest) {
         return ApiError.badRequest("Cannot change password for this account");
       }
 
-      const isValid = await verifyPassword(
+      const isValid = await comparePassword(
         current_password,
         userAuth.password_hash,
       );
