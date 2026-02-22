@@ -14,7 +14,7 @@ async function getRequests() {
 
   if (!res.ok) throw new Error("Failed to fetch requests");
   const data = await res.json();
-  return data.data.data || [];
+  return data.data || [];
 }
 
 export default async function ProviderRequestsPage() {

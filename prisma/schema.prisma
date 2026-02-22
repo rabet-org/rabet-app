@@ -113,6 +113,19 @@ enum AdminActionType {
   remove_admin
 }
 
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+}
+
 // ─────────────────────────────────────────────────────────
 // 1. USER
 // Core identity and status.
@@ -142,6 +155,11 @@ model User {
   admin_logs            AdminLog[]            @relation("AdminActions")
   reviewed_applications ProviderApplication[] @relation("ReviewedByAdmin")
   verified_profiles     ProviderProfile[]     @relation("VerifiedByAdmin")
+  support_tickets       SupportTicket[]       @relation("UserTickets")
+  assigned_tickets      SupportTicket[]       @relation("AssignedTickets")
+  ticket_replies        TicketReply[]
+  settings_updates      PlatformSetting[]
+  broadcast_messages    BroadcastMessage[]
 
   @@map("users")
 }
@@ -376,18 +394,24 @@ model WalletTransaction {
 // ─────────────────────────────────────────────────────────
 
 model Request {
-  id           String        @id @default(uuid())
-  user_id      String
-  category_id  String
-  title        String
-  description  String
-  budget_range String?
-  location     String?
-  status       RequestStatus @default(draft)
-  deadline     DateTime?
-  unlock_fee   Decimal       @default(50.00) @db.Decimal(12, 2)
-  created_at   DateTime      @default(now())
-  updated_at   DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  user_id            String
+  category_id        String
+  title              String
+  description        String
+  budget_range       String?
+  location           String?
+  status             RequestStatus @default(draft)
+  deadline           DateTime?
+  unlock_fee         Decimal       @default(50.00) @db.Decimal(12, 2)
+  project_duration   String?
+  experience_level   String?
+  skills_required    String[]      @default([])
+  preferred_language String?       @default("arabic")
+  is_urgent          Boolean       @default(false)
+  attachments        String[]      @default([])
+  created_at         DateTime      @default(now())
+  updated_at         DateTime      @updatedAt
 
   // Relations
   user     User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -552,4 +576,93 @@ model AdminLog {
   @@index([action_type, created_at])
   @@index([target_type, target_id])
   @@map("admin_logs")
+}
+
+// ─────────────────────────────────────────────────────────
+// 18. SUPPORT_TICKET
+// User support tickets and help requests.
+// ─────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id          String         @id @default(uuid())
+  user_id     String
+  subject     String
+  message     String
+  status      TicketStatus   @default(open)
+  priority    TicketPriority @default(medium)
+  assigned_to String?
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+
+  // Relations
+  user     User          @relation("UserTickets", fields: [user_id], references: [id], onDelete: Cascade)
+  assignee User?         @relation("AssignedTickets", fields: [assigned_to], references: [id])
+  replies  TicketReply[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([assigned_to])
+  @@map("support_tickets")
+}
+
+// ─────────────────────────────────────────────────────────
+// 19. TICKET_REPLY
+// Replies to support tickets from users or admins.
+// ─────────────────────────────────────────────────────────
+
+model TicketReply {
+  id         String   @id @default(uuid())
+  ticket_id  String
+  user_id    String
+  message    String
+  is_admin   Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  // Relations
+  ticket SupportTicket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([ticket_id])
+  @@map("ticket_replies")
+}
+
+// ─────────────────────────────────────────────────────────
+// 20. PLATFORM_SETTING
+// Global platform configuration settings.
+// ─────────────────────────────────────────────────────────
+
+model PlatformSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updated_by  String?
+  updated_at  DateTime @updatedAt
+  created_at  DateTime @default(now())
+
+  // Relations
+  updater User? @relation(fields: [updated_by], references: [id])
+
+  @@map("platform_settings")
+}
+
+// ─────────────────────────────────────────────────────────
+// 21. BROADCAST_MESSAGE
+// Admin broadcast messages to users.
+// ─────────────────────────────────────────────────────────
+
+model BroadcastMessage {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  target_role String
+  sent_count  Int      @default(0)
+  sent_by     String
+  created_at  DateTime @default(now())
+
+  // Relations
+  sender User @relation(fields: [sent_by], references: [id])
+
+  @@index([created_at])
+  @@map("broadcast_messages")
 }

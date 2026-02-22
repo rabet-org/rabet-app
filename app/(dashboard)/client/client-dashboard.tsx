@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAlertHelpers } from "@/components/ui/alert-toast";
+import Link from "next/link";
 
 type Request = {
   id: string;
@@ -188,10 +189,12 @@ export function ClientDashboardClient({
               Manage your posted requests and track provider interest
             </p>
           </div>
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <PlusIcon className="mr-2 size-4" />
-            Create New Request
-          </Button>
+          <Link href="/client/requests/new">
+            <Button>
+              <PlusIcon className="mr-2 size-4" />
+              Create New Request
+            </Button>
+          </Link>
         </div>
 
         {/* Stats Cards */}
@@ -227,6 +230,35 @@ export function ClientDashboardClient({
           </Card>
         </div>
 
+        {/* Recent Activity */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+          {requests.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <ClipboardTextIcon className="size-12 mx-auto mb-2 opacity-50" />
+              <p>No recent activity</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {requests.slice(0, 5).map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedRequest(request)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{request.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {request.total_unlocks} providers interested
+                    </div>
+                  </div>
+                  <div className="ml-4">{getStatusBadge(request.status)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Requests Table */}
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -250,13 +282,11 @@ export function ClientDashboardClient({
                     >
                       <ClipboardTextIcon className="size-12 mx-auto mb-2 opacity-50" />
                       <p>No requests yet</p>
-                      <Button
-                        variant="link"
-                        className="mt-2"
-                        onClick={() => setIsCreateOpen(true)}
-                      >
-                        Create your first request
-                      </Button>
+                      <Link href="/client/requests/new">
+                        <Button variant="link" className="mt-2">
+                          Create your first request
+                        </Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -320,7 +350,7 @@ export function ClientDashboardClient({
 
         {/* Create Request Dialog */}
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogContent className="max-w-2xl overflow-y-auto max-h-[90dvh]">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create Service Request</DialogTitle>
               <DialogDescription>
@@ -357,7 +387,7 @@ export function ClientDashboardClient({
                   id="category"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Select a category</option>
                   {categories.map((cat) => (

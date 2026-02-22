@@ -24,20 +24,18 @@ export async function GET(req: NextRequest) {
     }
 
     return ok({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      email_verified: user.email_verified,
-      is_active: user.is_active,
-      last_login_at: user.last_login_at,
-      created_at: user.created_at,
-      profile: user.profile
-        ? {
-            full_name: user.profile.full_name,
-            phone: user.profile.phone,
-            avatar_url: user.profile.avatar_url,
-          }
-        : null,
+      data: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        email_verified: user.email_verified,
+        is_active: user.is_active,
+        last_login_at: user.last_login_at,
+        created_at: user.created_at,
+        full_name: user.profile?.full_name || "",
+        phone: user.profile?.phone || null,
+        avatar_url: user.profile?.avatar_url || null,
+      },
     });
   } catch (err) {
     console.error("[GET /api/users/me]", err);

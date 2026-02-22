@@ -11,6 +11,8 @@ import {
   CalendarCheckIcon,
   UsersIcon,
   BuildingsIcon,
+  ChatCircleTextIcon,
+  GearIcon,
 } from "@phosphor-icons/react";
 
 const providerLinks: SidebarLink[] = [
@@ -43,6 +45,18 @@ const providerLinks: SidebarLink[] = [
     label: "My Profile",
     href: "/provider/profile",
     icon: BuildingsIcon,
+    category: "Settings",
+  },
+  {
+    label: "Messages",
+    href: "/provider/messages",
+    icon: ChatCircleTextIcon,
+    category: "Settings",
+  },
+  {
+    label: "Settings",
+    href: "/provider/settings",
+    icon: GearIcon,
     category: "Settings",
   },
 ];

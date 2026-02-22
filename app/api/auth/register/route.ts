@@ -8,7 +8,7 @@ import { created, ApiError } from "@/lib/api-response";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, full_name, phone } = body;
+    const { email, password, full_name, phone, role } = body;
 
     // ── Validation ──────────────────────────────────────
     if (!email || !password || !full_name) {
@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate role
+    const userRole = role === "provider" ? "provider" : "client";
+
     // ── Check duplicate email ────────────────────────────
     const existing = await db.user.findUnique({ where: { email } });
     if (existing) {
@@ -41,6 +44,7 @@ export async function POST(req: NextRequest) {
       const newUser = await tx.user.create({
         data: {
           email,
+          role: userRole,
           auth: {
             create: {
               password_hash,
@@ -62,18 +66,20 @@ export async function POST(req: NextRequest) {
     sendVerificationEmail(email, verificationToken).catch(console.error);
 
     return created({
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        email_verified: user.email_verified,
-        profile: {
-          full_name: user.profile?.full_name,
-          phone: user.profile?.phone ?? null,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          email_verified: user.email_verified,
+          profile: {
+            full_name: user.profile?.full_name,
+            phone: user.profile?.phone ?? null,
+          },
+          created_at: user.created_at,
         },
-        created_at: user.created_at,
+        message: "Verification email sent",
       },
-      message: "Verification email sent",
     });
   } catch (err) {
     console.error("[POST /auth/register]", err);

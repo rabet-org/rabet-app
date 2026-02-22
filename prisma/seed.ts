@@ -36,6 +36,10 @@ async function main() {
   await prisma.$transaction([
     prisma.adminLog.deleteMany(),
     prisma.notification.deleteMany(),
+    prisma.broadcastMessage.deleteMany(),
+    prisma.platformSetting.deleteMany(),
+    prisma.ticketReply.deleteMany(),
+    prisma.supportTicket.deleteMany(),
     prisma.review.deleteMany(),
     prisma.leadUnlock.deleteMany(), // Delete unlocks before transactions
     prisma.walletTransaction.deleteMany(),
@@ -331,6 +335,33 @@ async function main() {
         status: status as any,
         unlock_fee: 50.0,
         deadline: faker.date.future(),
+        project_duration: faker.helpers.arrayElement([
+          "1_week",
+          "2_weeks",
+          "1_month",
+          "2-3_months",
+          "3+_months",
+        ]),
+        experience_level: faker.helpers.arrayElement([
+          "Entry",
+          "Intermediate",
+          "Expert",
+        ]),
+        skills_required: faker.helpers.arrayElements(
+          [
+            "React",
+            "Node.js",
+            "Python",
+            "Design",
+            "Marketing",
+            "SEO",
+            "Content Writing",
+            "Video Editing",
+          ],
+          faker.number.int({ min: 1, max: 4 }),
+        ),
+        preferred_language: faker.helpers.arrayElement(["arabic", "english"]),
+        is_urgent: faker.datatype.boolean(0.3), // 30% chance of being urgent
       },
     });
     requests.push({ id: req.id, status: req.status, user_id: client_id });
@@ -444,6 +475,222 @@ async function main() {
     adminLogCount++;
   }
 
+  // 9. CREATE SUPPORT TICKETS
+  console.log(`➡️ Seeding Support Tickets...`);
+  const ticketSubjects = [
+    "Cannot unlock request",
+    "Payment issue",
+    "Profile update problem",
+    "Wallet balance not updated",
+    "Email verification not working",
+    "Unable to submit request",
+    "Provider verification delay",
+    "Refund request",
+  ];
+
+  // Get actual user IDs
+  const allUsers = await prisma.user.findMany({
+    where: {
+      OR: [{ role: "client" }, { role: "provider" }],
+    },
+    select: { id: true },
+  });
+
+  for (let i = 0; i < 15; i++) {
+    const user = faker.helpers.arrayElement(allUsers);
+    const status = faker.helpers.arrayElement([
+      "open",
+      "in_progress",
+      "resolved",
+      "closed",
+    ]);
+    const priority = faker.helpers.arrayElement(["low", "medium", "high"]);
+
+    const ticket = await prisma.supportTicket.create({
+      data: {
+        user_id: user.id,
+        subject: faker.helpers.arrayElement(ticketSubjects),
+        message: faker.lorem.paragraph(),
+        status: status as any,
+        priority: priority as any,
+        assigned_to: status !== "open" ? admin.id : null,
+        created_at: faker.date.recent({ days: 30 }),
+      },
+    });
+
+    // Add some replies for non-open tickets
+    if (status !== "open" && faker.datatype.boolean()) {
+      await prisma.ticketReply.create({
+        data: {
+          ticket_id: ticket.id,
+          user_id: admin.id,
+          message: faker.lorem.paragraph(),
+          is_admin: true,
+          created_at: faker.date.recent({ days: 25 }),
+        },
+      });
+
+      // User reply
+      if (faker.datatype.boolean()) {
+        await prisma.ticketReply.create({
+          data: {
+            ticket_id: ticket.id,
+            user_id: user.id,
+            message: faker.lorem.paragraph(),
+            is_admin: false,
+            created_at: faker.date.recent({ days: 20 }),
+          },
+        });
+      }
+    }
+  }
+
+  // 10. CREATE NOTIFICATIONS
+  console.log(`➡️ Seeding Notifications...`);
+  const notificationTypes = [
+    "email_verified",
+    "application_approved",
+    "application_rejected",
+    "request_unlocked",
+    "low_wallet_balance",
+    "new_review_received",
+    "request_status_changed",
+    "admin_message",
+  ];
+
+  // Get all user IDs for notifications
+  const allUserIds = [...clients];
+  // Get provider user IDs
+  const providerProfiles = await prisma.providerProfile.findMany({
+    select: { user_id: true },
+  });
+  allUserIds.push(...providerProfiles.map((p) => p.user_id));
+
+  // Create notifications for all users
+  for (const userId of allUserIds) {
+    const numNotifications = faker.number.int({ min: 3, max: 10 });
+    for (let i = 0; i < numNotifications; i++) {
+      const type = faker.helpers.arrayElement(notificationTypes);
+      const isRead = faker.datatype.boolean(0.6); // 60% chance of being read
+
+      await prisma.notification.create({
+        data: {
+          user_id: userId,
+          type: type as any,
+          title: getNotificationTitle(type),
+          message: getNotificationMessage(type),
+          is_read: isRead,
+          created_at: faker.date.recent({ days: 30 }),
+        },
+      });
+    }
+  }
+
+  // 11. CREATE PLATFORM SETTINGS
+  console.log(`➡️ Seeding Platform Settings...`);
+  const platformSettings = [
+    {
+      key: "platform_fee_percentage",
+      value: "10",
+      description: "Platform fee percentage on transactions",
+    },
+    {
+      key: "unlock_fee_default",
+      value: "50",
+      description: "Default unlock fee for requests",
+    },
+    {
+      key: "min_wallet_balance",
+      value: "100",
+      description: "Minimum wallet balance required",
+    },
+    {
+      key: "max_requests_per_day",
+      value: "10",
+      description: "Maximum requests a client can post per day",
+    },
+    {
+      key: "maintenance_mode",
+      value: "false",
+      description: "Enable/disable maintenance mode",
+    },
+    {
+      key: "email_notifications_enabled",
+      value: "true",
+      description: "Enable/disable email notifications",
+    },
+    {
+      key: "sms_notifications_enabled",
+      value: "false",
+      description: "Enable/disable SMS notifications",
+    },
+  ];
+
+  for (const setting of platformSettings) {
+    await prisma.platformSetting.create({
+      data: {
+        ...setting,
+        updated_by: admin.id,
+      },
+    });
+  }
+
+  // 12. CREATE BROADCAST MESSAGES
+  console.log(`➡️ Seeding Broadcast Messages...`);
+  const messageTemplates = [
+    {
+      title: "Platform Maintenance Notice",
+      message:
+        "We will be performing scheduled maintenance on Sunday from 2 AM to 4 AM. The platform will be temporarily unavailable during this time.",
+      target_role: "all",
+    },
+    {
+      title: "New Features Available",
+      message:
+        "Check out our new features including advanced search filters and improved messaging system!",
+      target_role: "all",
+    },
+    {
+      title: "Provider Verification Update",
+      message:
+        "We've updated our verification process to make it faster and more secure. Please review your profile.",
+      target_role: "provider",
+    },
+    {
+      title: "Special Offer for Clients",
+      message:
+        "Get 20% off on your first request unlock this month! Limited time offer.",
+      target_role: "client",
+    },
+    {
+      title: "Important Security Update",
+      message:
+        "We've enhanced our security measures. Please update your password if you haven't done so in the last 90 days.",
+      target_role: "all",
+    },
+  ];
+
+  for (const template of messageTemplates) {
+    const targetUsers = await prisma.user.findMany({
+      where:
+        template.target_role === "all"
+          ? {}
+          : { role: template.target_role as any },
+      select: { id: true },
+    });
+
+    await prisma.broadcastMessage.create({
+      data: {
+        title: template.title,
+        message: template.message,
+        target_role: template.target_role,
+        sent_count: targetUsers.length,
+        sent_by: admin.id,
+        created_at: faker.date.recent({ days: 60 }),
+      },
+    });
+  }
+
   console.log("\n🎉 Database Seed Complete!");
   console.log("-----------------------------------------");
   console.log("TEST ACCOUNTS (Password: password123)");
@@ -451,6 +698,42 @@ async function main() {
   console.log(`Client 1: client0@example.com`);
   console.log(`Provider: provider0@example.com`);
   console.log(`\nGenerated ${adminLogCount} admin logs for testing`);
+  console.log(`Generated 15 support tickets with replies`);
+  console.log(`Generated 5 broadcast messages`);
+  console.log(`Generated notifications for all users`);
+  console.log(`Generated platform settings`);
+}
+
+// Helper functions for notifications
+function getNotificationTitle(type: string): string {
+  const titles: Record<string, string> = {
+    email_verified: "Email Verified",
+    application_approved: "Application Approved",
+    application_rejected: "Application Rejected",
+    request_unlocked: "Request Unlocked",
+    low_wallet_balance: "Low Wallet Balance",
+    new_review_received: "New Review Received",
+    request_status_changed: "Request Status Changed",
+    admin_message: "Message from Admin",
+  };
+  return titles[type] || "Notification";
+}
+
+function getNotificationMessage(type: string): string {
+  const messages: Record<string, string> = {
+    email_verified: "Your email has been successfully verified.",
+    application_approved:
+      "Congratulations! Your provider application has been approved.",
+    application_rejected:
+      "Your provider application has been rejected. Please review the feedback.",
+    request_unlocked: "A provider has unlocked your request.",
+    low_wallet_balance:
+      "Your wallet balance is low. Please add funds to continue.",
+    new_review_received: "You have received a new review from a client.",
+    request_status_changed: "The status of your request has been updated.",
+    admin_message: "You have a new message from the admin team.",
+  };
+  return messages[type] || "You have a new notification.";
 }
 
 main()

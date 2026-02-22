@@ -56,6 +56,19 @@ export function ProviderDashboardClient({
   wallet: Wallet;
   recentUnlocks: Unlock[];
 }) {
+  if (!profile) {
+    return (
+      <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background">
+        <Topbar title="Provider Overview" />
+        <main className="flex-1 p-6">
+          <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-8 text-center text-red-500">
+            Profile data is missing. Please refresh the page.
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background">
       <Topbar title="Provider Overview" />
@@ -144,21 +157,42 @@ export function ProviderDashboardClient({
           <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Link href="/provider/requests">
-              <Button variant="outline" className="w-full justify-start">
-                <TrendUpIcon className="mr-2 size-4" />
-                Browse New Requests
+              <Button variant="outline" className="w-full justify-start h-auto py-4">
+                <div className="flex flex-col items-start gap-1 w-full">
+                  <div className="flex items-center gap-2">
+                    <TrendUpIcon className="size-5" />
+                    <span className="font-semibold">Browse Requests</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Find new opportunities
+                  </span>
+                </div>
               </Button>
             </Link>
             <Link href="/provider/leads">
-              <Button variant="outline" className="w-full justify-start">
-                <EnvelopeIcon className="mr-2 size-4" />
-                View My Leads
+              <Button variant="outline" className="w-full justify-start h-auto py-4">
+                <div className="flex flex-col items-start gap-1 w-full">
+                  <div className="flex items-center gap-2">
+                    <EnvelopeIcon className="size-5" />
+                    <span className="font-semibold">My Leads</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {profile.total_unlocks} unlocked
+                  </span>
+                </div>
               </Button>
             </Link>
-            <Link href="/provider/profile">
-              <Button variant="outline" className="w-full justify-start">
-                <ShieldCheckIcon className="mr-2 size-4" />
-                Edit Profile
+            <Link href="/provider/wallet">
+              <Button variant="outline" className="w-full justify-start h-auto py-4">
+                <div className="flex flex-col items-start gap-1 w-full">
+                  <div className="flex items-center gap-2">
+                    <WalletIcon className="size-5" />
+                    <span className="font-semibold">Add Funds</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Current: {wallet ? `${wallet.balance.toFixed(0)} EGP` : "N/A"}
+                  </span>
+                </div>
               </Button>
             </Link>
           </div>

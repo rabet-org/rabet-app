@@ -70,6 +70,19 @@ export function WalletClient({
 
   const { success, error } = useAlertHelpers();
 
+  if (!wallet) {
+    return (
+      <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background">
+        <Topbar title="My Wallet" />
+        <main className="flex-1 p-6">
+          <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-8 text-center text-red-500">
+            Wallet data is missing. Please refresh the page.
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const refreshData = async () => {
     try {
       const [walletRes, transactionsRes] = await Promise.all([
@@ -93,7 +106,7 @@ export function WalletClient({
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount <= 0) {
-      await error("Please enter a valid amount");
+      error("Please enter a valid amount");
       return;
     }
 
@@ -110,13 +123,13 @@ export function WalletClient({
         setIsDepositOpen(false);
         setDepositAmount("");
         await refreshData();
-        await success("Funds added successfully");
+        success("Funds added successfully");
       } else {
         const errorData = await res.json();
-        await error(errorData.message || "Deposit failed");
+        error(errorData.message || "Deposit failed");
       }
     } catch (e) {
-      await error("Network error occurred");
+      error("Network error occurred");
     } finally {
       setIsProcessing(false);
     }

@@ -113,7 +113,11 @@ export function Topbar({
           .find((r) => r.startsWith("user_role="))
           ?.split("=")[1]
       : null) || "admin";
-  const roleInitial = role.charAt(0).toUpperCase();
+  const [roleInitial, setRoleInitial] = useState("A");
+
+  useEffect(() => {
+    setRoleInitial(role.charAt(0).toUpperCase());
+  }, [role]);
 
   return (
     <header
@@ -260,11 +264,11 @@ export function Topbar({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/admin/settings")}>
+            <DropdownMenuItem onClick={() => router.push(`/${role}/profile`)}>
               <UserCircleIcon className="mr-2 size-4" />
               My Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/admin/settings")}>
+            <DropdownMenuItem onClick={() => router.push(`/${role}/settings`)}>
               <GearIcon className="mr-2 size-4" />
               Settings
             </DropdownMenuItem>

@@ -100,6 +100,12 @@ export async function POST(req: NextRequest) {
       budget_range,
       location,
       deadline,
+      project_duration,
+      experience_level,
+      skills_required,
+      preferred_language,
+      is_urgent,
+      attachments,
     } = body;
 
     if (!category_id || !title || !description) {
@@ -124,7 +130,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Ensure the default unlock_fee logic exists if doing dynamic pricing later
-    const baseUnlockFee = 50.0;
+    const baseUnlockFee = is_urgent ? 75.0 : 50.0; // Higher fee for urgent requests
 
     const newRequest = await db.request.create({
       data: {

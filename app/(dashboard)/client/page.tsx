@@ -23,11 +23,11 @@ async function getClientData() {
   const requests = await requestsRes.json();
   const categories = categoriesRes.ok
     ? await categoriesRes.json()
-    : { data: { data: [] } };
+    : { data: [] };
 
   return {
-    requests: requests.data.data || [],
-    categories: categories.data.data || [],
+    requests: requests.data || [],
+    categories: categories.data || [],
   };
 }
 

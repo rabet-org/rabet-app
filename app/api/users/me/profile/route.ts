@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { authenticate, isAuthenticated } from "@/lib/auth";
 import { ok, ApiError } from "@/lib/api-response";
+import { verifyPassword, hashPassword } from "@/lib/password";
 
 /**
  * PATCH /api/users/me/profile
- * Update the current user's profile information.
+ * Update the current user's profile information and/or password.
  */
 export async function PATCH(req: NextRequest) {
   try {
@@ -13,7 +14,39 @@ export async function PATCH(req: NextRequest) {
     if (!isAuthenticated(userPayload)) return userPayload;
 
     const body = await req.json();
-    const { full_name, phone, avatar_url } = body;
+    const { full_name, phone, avatar_url, current_password, new_password } =
+      body;
+
+    // Handle password change if requested
+    if (current_password && new_password) {
+      const userAuth = await db.userAuth.findUnique({
+        where: { user_id: userPayload.sub },
+      });
+
+      if (!userAuth || !userAuth.password_hash) {
+        return ApiError.badRequest("Cannot change password for this account");
+      }
+
+      const isValid = await verifyPassword(
+        current_password,
+        userAuth.password_hash,
+      );
+      if (!isValid) {
+        return ApiError.unauthorized("Current password is incorrect");
+      }
+
+      if (new_password.length < 8) {
+        return ApiError.badRequest(
+          "New password must be at least 8 characters",
+        );
+      }
+
+      const newHash = await hashPassword(new_password);
+      await db.userAuth.update({
+        where: { user_id: userPayload.sub },
+        data: { password_hash: newHash },
+      });
+    }
 
     // We only update the profile table, not the core user table (email etc)
     const updatedProfile = await db.userProfile.upsert({

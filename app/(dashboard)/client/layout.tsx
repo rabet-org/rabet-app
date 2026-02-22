@@ -8,6 +8,11 @@ import {
   BrowsersIcon,
   ChatCircleTextIcon,
   GearIcon,
+  UsersIcon,
+  HeartIcon,
+  StarIcon,
+  BellIcon,
+  LifebuoyIcon,
 } from "@phosphor-icons/react";
 
 const clientLinks: SidebarLink[] = [
@@ -29,6 +34,36 @@ const clientLinks: SidebarLink[] = [
     href: "/client/requests/new",
     icon: CalendarPlusIcon,
     category: "Activity",
+  },
+  {
+    label: "Browse Providers",
+    href: "/client/providers",
+    icon: UsersIcon,
+    category: "Providers",
+  },
+  {
+    label: "Saved Providers",
+    href: "/client/saved",
+    icon: HeartIcon,
+    category: "Providers",
+  },
+  {
+    label: "My Reviews",
+    href: "/client/reviews",
+    icon: StarIcon,
+    category: "Providers",
+  },
+  {
+    label: "Notifications",
+    href: "/client/notifications",
+    icon: BellIcon,
+    category: "Account",
+  },
+  {
+    label: "Support",
+    href: "/client/support",
+    icon: LifebuoyIcon,
+    category: "Account",
   },
   {
     label: "Messages",

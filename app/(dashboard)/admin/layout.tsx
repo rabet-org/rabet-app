@@ -15,6 +15,11 @@ import {
   Receipt,
   ArrowCounterClockwise,
   ShieldCheckIcon,
+  BellIcon,
+  GearIcon,
+  ChatCircleTextIcon,
+  DownloadIcon,
+  PaperPlaneIcon,
 } from "@phosphor-icons/react";
 
 const adminLinks: SidebarLink[] = [
@@ -89,6 +94,36 @@ const adminLinks: SidebarLink[] = [
     label: "Admin Team",
     href: "/admin/team",
     icon: ShieldCheckIcon,
+    category: "System",
+  },
+  {
+    label: "Platform Settings",
+    href: "/admin/platform-settings",
+    icon: GearIcon,
+    category: "System",
+  },
+  {
+    label: "Notifications",
+    href: "/admin/notifications",
+    icon: BellIcon,
+    category: "System",
+  },
+  {
+    label: "Support Tickets",
+    href: "/admin/support",
+    icon: ChatCircleTextIcon,
+    category: "System",
+  },
+  {
+    label: "Broadcast Messages",
+    href: "/admin/messages",
+    icon: PaperPlaneIcon,
+    category: "System",
+  },
+  {
+    label: "Export Data",
+    href: "/admin/exports",
+    icon: DownloadIcon,
     category: "System",
   },
 ];

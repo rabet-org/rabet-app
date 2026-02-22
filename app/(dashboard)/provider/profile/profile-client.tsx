@@ -54,6 +54,19 @@ export function ProfileClient({
   initialProfile: Profile;
   categories: Category[];
 }) {
+  if (!initialProfile) {
+    return (
+      <div className="flex flex-col min-h-screen bg-neutral-50/50 dark:bg-background">
+        <Topbar title="Provider Profile" />
+        <main className="flex-1 p-6">
+          <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-8 text-center text-red-500">
+            Profile data is missing. Please refresh the page.
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const [profile, setProfile] = useState<Profile>(initialProfile);
   const [description, setDescription] = useState(profile.description || "");
   const [portfolioUrl, setPortfolioUrl] = useState(profile.portfolio_url || "");
