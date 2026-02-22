@@ -10,6 +10,12 @@ import { authenticate, isAuthenticated, requireRole } from "@/lib/auth";
  */
 export async function GET(req: NextRequest) {
   try {
+    const userPayload = await authenticate(req);
+    if (!isAuthenticated(userPayload)) return userPayload;
+
+    const roleError = requireRole(userPayload, "admin");
+    if (roleError) return roleError;
+
     const { searchParams } = new URL(req.url);
     const isActiveParam = searchParams.get("is_active");
 
@@ -54,7 +60,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[GET /api/categories]", err);
+    console.error("[GET /api/admin/categories]", err);
     return ApiError.internal();
   }
 }

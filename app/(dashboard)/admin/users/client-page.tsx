@@ -34,6 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAlertHelpers } from "@/components/ui/alert-toast";
 
 type User = {
   id: string;
@@ -71,6 +72,8 @@ export default function AdminUsersClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all"); // "all", "active", "pending", "banned"
+
+  const { success, error, confirm } = useAlertHelpers();
 
   const fetchUsers = useCallback(async () => {
     setIsFetching(true);
@@ -133,12 +136,11 @@ export default function AdminUsersClient({
   }, [searchQuery, roleFilter, statusFilter, fetchUsers]);
 
   const toggleBan = async (id: string, currentlyBlocked: boolean) => {
-    if (
-      !confirm(
-        `Are you sure you want to ${currentlyBlocked ? "unban" : "ban"} this user?`,
-      )
-    )
-      return;
+    const confirmed = await confirm(
+      `Are you sure you want to ${currentlyBlocked ? "unban" : "ban"} this user?`,
+      currentlyBlocked ? "Unban User" : "Ban User"
+    );
+    if (!confirmed) return;
 
     setIsUpdating(true);
     try {
@@ -157,12 +159,13 @@ export default function AdminUsersClient({
       if (res.ok) {
         setSelectedUser(null);
         await fetchUsers();
+        await success(`User ${currentlyBlocked ? "unbanned" : "banned"} successfully`);
       } else {
         const data = await res.json();
-        alert(data.message || "Action failed");
+        await error(data.message || "Action failed");
       }
     } catch (e) {
-      alert("Network error occurred.");
+      await error("Network error occurred.");
     } finally {
       setIsUpdating(false);
     }

@@ -30,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAlertHelpers } from "@/components/ui/alert-toast";
 
 type Application = {
   id: string;
@@ -57,6 +58,8 @@ export default function AdminApplicationsClient({
   const [apps, setApps] = useState<Application[]>(initialData);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  const { success, error } = useAlertHelpers();
 
   const refreshList = async () => {
     try {
@@ -89,12 +92,13 @@ export default function AdminApplicationsClient({
       if (res.ok) {
         setSelectedApp(null);
         await refreshList();
+        await success(`Application ${action === "approve" ? "approved" : "rejected"} successfully`);
       } else {
         const errorData = await res.json();
-        alert(errorData.message || "Action failed");
+        await error(errorData.message || "Action failed");
       }
     } catch (e) {
-      alert("Network error occurred.");
+      await error("Network error occurred.");
     } finally {
       setIsUpdating(false);
     }

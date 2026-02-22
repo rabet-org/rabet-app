@@ -10,25 +10,28 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 const createPrismaClient = () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const connectionString = process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not defined in environment variables");
+  }
+
+  const pool = new Pool({ 
+    connectionString,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+  
   const adapter = new PrismaPg(pool);
 
   const client = new PrismaClient({
     adapter,
     log:
       process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
+        ? ["error", "warn"]
         : ["error"],
   });
-
-  client
-    .$connect()
-    .then(() => {
-      console.log("✅ Database connected successfully");
-    })
-    .catch((err) => {
-      console.error("❌ Database connection failed:", err);
-    });
 
   return client;
 };
