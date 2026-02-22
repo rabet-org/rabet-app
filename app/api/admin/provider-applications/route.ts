@@ -72,7 +72,11 @@ export async function GET(req: NextRequest) {
         id: app.id,
         provider_type: app.provider_type,
         business_name: app.business_name,
+        description: app.description,
+        portfolio_url: app.portfolio_url,
         application_status: app.application_status,
+        rejection_reason: app.rejection_reason,
+        reviewed_at: app.reviewed_at,
         created_at: app.created_at,
         applicant: {
           id: app.user_id,
