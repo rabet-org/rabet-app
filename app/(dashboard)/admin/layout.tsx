@@ -7,6 +7,10 @@ import {
   UsersIcon,
   FileTextIcon,
   ClipboardTextIcon,
+  TagIcon,
+  BuildingsIcon,
+  ListChecksIcon,
+  StarIcon,
 } from "@phosphor-icons/react";
 
 const adminLinks: SidebarLink[] = [
@@ -30,10 +34,34 @@ const adminLinks: SidebarLink[] = [
     category: "Management",
   },
   {
+    label: "Providers",
+    href: "/admin/providers",
+    icon: BuildingsIcon,
+    category: "Management",
+  },
+  {
+    label: "Categories",
+    href: "/admin/categories",
+    icon: TagIcon,
+    category: "Content",
+  },
+  {
+    label: "Requests",
+    href: "/admin/requests",
+    icon: ListChecksIcon,
+    category: "Content",
+  },
+  {
+    label: "Reviews",
+    href: "/admin/reviews",
+    icon: StarIcon,
+    category: "Content",
+  },
+  {
     label: "Audit Logs",
     href: "/admin/logs",
     icon: ClipboardTextIcon,
-    category: "Management",
+    category: "System",
   },
 ];
 

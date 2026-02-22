@@ -36,13 +36,14 @@ async function main() {
     prisma.adminLog.deleteMany(),
     prisma.notification.deleteMany(),
     prisma.review.deleteMany(),
+    prisma.leadUnlock.deleteMany(), // Delete unlocks before transactions
     prisma.walletTransaction.deleteMany(),
-    prisma.leadUnlock.deleteMany(),
     prisma.request.deleteMany(),
     prisma.providerService.deleteMany(),
     prisma.providerWallet.deleteMany(),
     prisma.providerProfile.deleteMany(),
     prisma.providerApplication.deleteMany(),
+    prisma.refreshToken.deleteMany(), // Add this
     prisma.userProfile.deleteMany(),
     prisma.userAuth.deleteMany(),
     prisma.user.deleteMany(),
@@ -53,17 +54,24 @@ async function main() {
 
   // 1. CREATE CATEGORIES
   console.log("➡️ Seeding Categories...");
+  const categoryData = [
+    { name: "Web Development", slug: "web-development", icon: "💻", description: "Website and web application development services" },
+    { name: "Mobile Apps", slug: "mobile-apps", icon: "📱", description: "iOS and Android mobile application development" },
+    { name: "Graphic Design", slug: "graphic-design", icon: "🎨", description: "Logo, branding, and visual design services" },
+    { name: "Digital Marketing", slug: "digital-marketing", icon: "📈", description: "SEO, social media, and online marketing" },
+    { name: "Content Writing", slug: "content-writing", icon: "✍️", description: "Blog posts, articles, and copywriting" },
+    { name: "Video Production", slug: "video-production", icon: "🎬", description: "Video editing and production services" },
+    { name: "Photography", slug: "photography", icon: "📸", description: "Professional photography services" },
+    { name: "Translation", slug: "translation", icon: "🌐", description: "Document and content translation" },
+    { name: "Consulting", slug: "consulting", icon: "💼", description: "Business and technical consulting" },
+    { name: "Legal Services", slug: "legal-services", icon: "⚖️", description: "Legal advice and documentation" },
+  ];
+
   const categories: string[] = [];
-  for (let i = 0; i < NUM_CATEGORIES; i++) {
-    const slug =
-      faker.helpers.slugify(faker.commerce.department()).toLowerCase() +
-      `-${faker.string.alphanumeric(4)}`;
+  for (const catData of categoryData) {
     const cat = await prisma.category.create({
       data: {
-        name: faker.commerce.department() + " Services",
-        slug,
-        description: faker.lorem.sentence(),
-        icon: faker.image.urlLoremFlickr({ category: "business" }),
+        ...catData,
         is_active: true,
       },
     });
@@ -197,7 +205,11 @@ async function main() {
   const statusDist = [
     "published",
     "published",
+    "published",
     "in_progress",
+    "in_progress",
+    "completed",
+    "completed",
     "completed",
     "cancelled",
     "draft",
@@ -231,6 +243,8 @@ async function main() {
   const activeReqs = requests.filter(
     (r) => r.status === "in_progress" || r.status === "completed",
   );
+
+  let adminLogCount = 0;
 
   for (const req of activeReqs) {
     // Pick random provider to unlock it
@@ -301,12 +315,43 @@ async function main() {
     }
   }
 
+  // 7. CREATE ADMIN LOGS (Simulate admin actions)
+  console.log(`➡️ Seeding Admin Logs...`);
+  const adminActions = [
+    "approve_provider",
+    "verify_provider",
+    "adjust_wallet",
+    "block_user",
+    "moderate_request",
+  ];
+
+  for (let i = 0; i < 20; i++) {
+    const action = faker.helpers.arrayElement(adminActions);
+    const provider_id = faker.helpers.arrayElement(providers);
+    
+    await prisma.adminLog.create({
+      data: {
+        admin_id: admin.id,
+        action_type: action as any,
+        target_type: "provider",
+        target_id: provider_id,
+        details: {
+          reason: faker.lorem.sentence(),
+          timestamp: faker.date.recent(),
+        },
+        created_at: faker.date.recent({ days: 7 }),
+      },
+    });
+    adminLogCount++;
+  }
+
   console.log("\n🎉 Database Seed Complete!");
   console.log("-----------------------------------------");
   console.log("TEST ACCOUNTS (Password: password123)");
   console.log("Admin:    admin@rabet.com");
   console.log(`Client 1: client0@example.com`);
   console.log(`Provider: provider0@example.com`);
+  console.log(`\nGenerated ${adminLogCount} admin logs for testing`);
 }
 
 main()
